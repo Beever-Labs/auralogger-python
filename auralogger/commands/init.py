@@ -15,6 +15,7 @@ from auralogger.env_config import (
     format_dotenv_line,
     get_resolved_project_token,
     get_resolved_session,
+    is_full_runtime_env_configured,
 )
 from auralogger.log_styles import build_style_entries_from_api
 from auralogger.proj_auth import fetch_proj_auth_payload
@@ -96,10 +97,59 @@ def print_copy_paste_env_block(
     print()
 
 
+def _build_server_integration_snippet() -> str:
+    return "\n".join(
+        [
+            "from auralogger import AuraServer",
+            "",
+            "def configure_auralogger() -> None:",
+            "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
+            "    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()",
+            "    if not project_token or not user_secret:",
+            "        raise RuntimeError('Missing Auralogger server env variables')",
+            "    AuraServer.sync_from_secret(project_token, user_secret)",
+            "",
+            "def log_checkout_error(order_id: str, error: str) -> None:",
+            "    AuraServer.log('error', 'checkout failed', 'payments/checkout', {",
+            "        'order_id': order_id,",
+            "        'error': error,",
+            "    })",
+        ]
+    )
+
+
+def _print_integration_help() -> None:
+    print()
+    print("Server integration snippet (Python)")
+    print()
+    print(_build_server_integration_snippet())
+    print()
+    print(
+        "Frontend/browser integration is handled by the Node package "
+        "auralogger-cli/client. Python package support here is server-side."
+    )
+    print()
+
+
+def _print_already_configured_success() -> None:
+    print()
+    print(
+        "Auralogger env is already configured in this shell "
+        "(project token + user secret + session)."
+    )
+    print("Reusing existing values; no fresh proj_auth call needed.")
+    _print_integration_help()
+    print("Run auralogger server-check to verify end-to-end connectivity.")
+
+
 def run_init() -> None:
     project_token_was_in_env = get_resolved_project_token() is not None
     user_secret_was_in_env = _user_secret_explicitly_in_env()
     session_was_in_env = get_resolved_session() is not None
+
+    if is_full_runtime_env_configured():
+        _print_already_configured_success()
+        return
 
     project_token = resolve_project_token_for_init()
     user_secret = resolve_user_secret_for_init()
@@ -125,6 +175,7 @@ def run_init() -> None:
         session_was_in_env,
         user_secret,
     )
+    _print_integration_help()
 
     print(
         'Auralogger init finished. After the variables are set, run: auralogger server-check'

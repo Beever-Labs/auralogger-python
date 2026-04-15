@@ -14,7 +14,7 @@ from auralogger.backend_origin import (
     build_create_browser_logs_url,
     resolve_ws_base_url,
 )
-from auralogger.env_config import require_project_token_for_cli
+from auralogger.cli_auth import resolve_project_token_for_init
 from auralogger.proj_auth import fetch_proj_auth_payload
 
 CONNECT_TIMEOUT_S = 5
@@ -28,7 +28,7 @@ def _iso_timestamp_with_micros(epoch_ms: float) -> str:
 
 
 def run_test_clientlog() -> None:
-    project_token = require_project_token_for_cli()
+    project_token = resolve_project_token_for_init()
     raw = fetch_proj_auth_payload(project_token)
     auth = cast(Dict[str, Any], raw)
 

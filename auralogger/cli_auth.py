@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, Dict, cast
+
+from auralogger.env_config import ENV_PROJECT_TOKEN
 from auralogger.env_config import (
-    ENV_PROJECT_TOKEN,
     ENV_USER_SECRET,
     get_resolved_project_token,
     get_resolved_user_secret,
 )
+from auralogger.proj_auth import fetch_proj_auth_payload
+
+
+@dataclass(frozen=True)
+class CliProjectContext:
+    project_token: str
+    user_secret: str
+    project_id: str
+    project_name: str
+    session: str
 
 
 def prompt_for_project_token() -> str:
@@ -38,3 +51,29 @@ def resolve_user_secret_for_init() -> str:
     if s:
         return s
     return prompt_for_user_secret()
+
+
+def resolve_project_context_for_cli_checks() -> CliProjectContext:
+    project_token = resolve_project_token_for_init()
+    user_secret = resolve_user_secret_for_init()
+    raw = fetch_proj_auth_payload(project_token)
+    auth = cast(Dict[str, Any], raw)
+
+    project_id_raw = auth.get("project_id")
+    project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
+    project_name_raw = auth.get("project_name")
+    project_name = project_name_raw.strip() if isinstance(project_name_raw, str) else ""
+    session_raw = auth.get("session")
+    session = session_raw.strip() if isinstance(session_raw, str) else ""
+    if not project_id or not session:
+        raise ValueError(
+            f"{ENV_PROJECT_TOKEN} looks invalid, or proj_auth did not return project_id/session."
+        )
+
+    return CliProjectContext(
+        project_token=project_token,
+        user_secret=user_secret,
+        project_id=project_id,
+        project_name=project_name,
+        session=session,
+    )

@@ -30,6 +30,9 @@ Default API/WebSocket hosts need no URL config unless you override them. See **[
 - `auralogger test-clientlog` — send 5 browser-ingest test logs.
 - `auralogger get-logs [filters...]` — fetch and print logs.
 
+For application/runtime usage (not CLI), Python now exposes an importable client SDK:
+`from auralogger.client import AuraClient, ClientLogInputs, auralog`.
+
 If you run an unknown command, the CLI exits with code `1`, prints `Unknown command: <name>`, and shows usage plus valid commands so you can retry quickly.
 
 ---

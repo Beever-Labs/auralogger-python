@@ -39,6 +39,7 @@ Older names such as `AURALOGGER_SECRET_KEY` are **not** read.
 | **`auralogger test-clientlog`** | Prompts for missing token, then sends a 5-log burst through `create_browser_logs` using path-only auth. |
 | **`auralogger get-logs`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; styles from env or fetched once via `proj_auth` for that run. |
 | **`aura_log()`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; id/session/styles from env or from a cached `proj_auth` fetch. Otherwise console-only with a one-time stderr hint. |
+| **`AuraClient` / `client_log()`** | `AURALOGGER_PROJECT_TOKEN` (or `AuraClient.configure(...)`) and reachable `proj_auth` for full send path; falls back to console-only if project/session hydration fails. |
 
 ## Optional
 

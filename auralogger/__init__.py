@@ -6,6 +6,13 @@ from auralogger.backend_origin import (
     build_proj_auth_url,
     build_project_logs_url,
 )
+from auralogger.client.client_log import (
+    AuraClient,
+    ClientLogInputs,
+    auralog,
+    client_log,
+    close_client_log_socket,
+)
 from auralogger.commands.client_check import run_client_check
 from auralogger.commands.init import run_init
 from auralogger.commands.server_check import run_server_check
@@ -28,6 +35,11 @@ __all__ = [
     "aura_log",
     "close_aura_log_socket",
     "AuraServer",
+    "AuraClient",
+    "ClientLogInputs",
+    "auralog",
+    "client_log",
+    "close_client_log_socket",
     "log",
     "run_get_logs",
     "normalize_and_validate_filters",

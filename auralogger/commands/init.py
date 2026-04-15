@@ -129,6 +129,33 @@ def _build_server_integration_snippet() -> str:
     )
 
 
+def _build_client_integration_snippet() -> str:
+    return "\n".join(
+        [
+            "from typing import Any, Dict, Literal, Optional",
+            "from pydantic import BaseModel, Field",
+            "from auralogger.client import AuraClient",
+            "",
+            "class ClientLogInputs(BaseModel):",
+            "    type: Literal['debug', 'info', 'warn', 'error'] = 'info'",
+            "    message: str = Field(..., min_length=1)",
+            "    location: Optional[str] = None",
+            "    data: Optional[Dict[str, Any]] = None",
+            "",
+            "def configure_client_logger(project_token: str) -> None:",
+            "    AuraClient.sync_from_secret(project_token)",
+            "",
+            "def auralog(loginputs: ClientLogInputs) -> None:",
+            "    AuraClient.log(",
+            "        loginputs.type,",
+            "        loginputs.message,",
+            "        loginputs.location,",
+            "        loginputs.data,",
+            "    )",
+        ]
+    )
+
+
 def _print_integration_help() -> None:
     print()
     print("Server integration snippet (Python)")
@@ -136,8 +163,14 @@ def _print_integration_help() -> None:
     print(_build_server_integration_snippet())
     print()
     print(
-        "Frontend/browser integration is handled by the Node package "
-        "auralogger-cli/client. Python package support here is server-side."
+        "Client/browser-ingest integration snippet (Python SDK)."
+    )
+    print()
+    print(_build_client_integration_snippet())
+    print()
+    print(
+        "If your frontend runtime is JavaScript/TypeScript, use the Node package "
+        "auralogger-cli/client instead."
     )
     print()
 

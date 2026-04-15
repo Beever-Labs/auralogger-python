@@ -45,7 +45,23 @@ Python keeps snake_case naming, but key public names map directly to Node concep
 | `AuraServer.log(...)` | `AuraServer.log(...)` and `aura_log(...)` |
 | `AuraServer.closeSocket(...)` | `AuraServer.close_socket(...)` and `close_aura_log_socket()` |
 | `fetchProjAuthConfig(...)` | `fetch_proj_auth_config(...)` (`fetch_proj_auth_payload(...)` remains supported) |
-| `AuraClient` / `clientlog(...)` | Not yet exposed as a Python library API |
+| `AuraClient` / `clientlog(...)` | `AuraClient`, `client_log(...)`, and typed `auralog(ClientLogInputs(...))` |
+
+Client SDK quickstart:
+
+```python
+from auralogger.client import AuraClient, ClientLogInputs, auralog
+
+AuraClient.sync_from_secret("project-token")
+auralog(
+    ClientLogInputs(
+        type="info",
+        message="hello from client sdk",
+        location="example/client",
+        data={"source": "python"},
+    )
+)
+```
 
 ## Commands
 

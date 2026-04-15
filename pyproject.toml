@@ -27,6 +27,7 @@ classifiers = [
   "Topic :: System :: Logging",
 ]
 dependencies = [
+  "pydantic>=2.0.0",
   "python-dotenv>=1.0.0",
   "websocket-client>=1.6.0",
 ]

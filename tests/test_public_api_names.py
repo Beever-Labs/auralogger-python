@@ -3,7 +3,14 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from auralogger import AuraServer, fetch_proj_auth_config, fetch_proj_auth_payload
+from auralogger import (
+    AuraClient,
+    AuraServer,
+    ClientLogInputs,
+    auralog,
+    fetch_proj_auth_config,
+    fetch_proj_auth_payload,
+)
 
 
 class PublicApiNamingTests(unittest.TestCase):
@@ -36,6 +43,23 @@ class PublicApiNamingTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 AuraServer.sync_from_secret("cipher-token")
+
+    def test_aura_client_log_delegates_to_client_log(self) -> None:
+        with patch("auralogger.client.client_log.client_log") as mocked:
+            AuraClient.log("info", "hello", "tests/public-api", {"k": 1})
+        mocked.assert_called_once_with("info", "hello", "tests/public-api", {"k": 1})
+
+    def test_client_auralog_uses_model_fields(self) -> None:
+        with patch("auralogger.client.client_log.AuraClient.log") as mocked:
+            auralog(
+                ClientLogInputs(
+                    type="info",
+                    message="hello",
+                    location="tests/public-api",
+                    data={"k": 1},
+                )
+            )
+        mocked.assert_called_once_with("info", "hello", "tests/public-api", {"k": 1})
 
 
 if __name__ == "__main__":

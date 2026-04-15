@@ -58,7 +58,8 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 ## Namespaced compatibility exports
 
 - `auralogger/server/__init__.py` — server runtime re-exports (`AuraServer`, `aura_log`, `close_aura_log_socket`)
-- `auralogger/client/__init__.py` — client-related CLI helper re-exports (`run_client_check`, `run_test_clientlog`)
+- `auralogger/client/__init__.py` — client SDK + CLI re-exports (`AuraClient`, `client_log`, typed `auralog`, plus check/test commands)
+- `auralogger/client/client_log.py` — importable browser-ingest runtime (`AuraClient`) with token override, `proj_auth` hydration cache, socket reuse + idle close, and typed inputs
 - `auralogger/utils/__init__.py` — URL/env/error utility re-exports for stable namespaced imports
 
 ## Configuration (os.environ)

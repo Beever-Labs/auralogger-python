@@ -34,6 +34,8 @@ _local_session_id: Optional[str] = None
 _hydrate_lock = threading.Lock()
 _hydration_cache_token: Optional[str] = None
 _hydration_cache_raw: Optional[Dict[str, Any]] = None
+_override_project_token: Optional[str] = None
+_override_user_secret: Optional[str] = None
 
 
 def _encode_path_token(project_token: str) -> str:
@@ -125,6 +127,22 @@ def _fetch_proj_auth_cached(project_token: str) -> Optional[Dict[str, Any]]:
         return raw
 
 
+def _resolve_project_token_runtime() -> Optional[str]:
+    if _override_project_token is not None:
+        s = _override_project_token.strip()
+        if s:
+            return s
+    return get_resolved_project_token()
+
+
+def _resolve_user_secret_runtime() -> Optional[str]:
+    if _override_user_secret is not None:
+        s = _override_user_secret.strip()
+        if s:
+            return s
+    return get_resolved_user_secret()
+
+
 def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
     from auralogger.env_config import get_resolved_project_id
 
@@ -207,8 +225,8 @@ def aura_log(
     """
     global _warned_incomplete_env
 
-    project_token = get_resolved_project_token()
-    user_secret = get_resolved_user_secret()
+    project_token = _resolve_project_token_runtime()
+    user_secret = _resolve_user_secret_runtime()
 
     merged = None
     if project_token and user_secret:
@@ -278,4 +296,51 @@ def aura_log(
         close_aura_log_socket()
     except Exception as e:
         print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
+        close_aura_log_socket()
+
+
+class AuraServer:
+    """Node-parity server logger wrapper over ``aura_log`` runtime behavior."""
+
+    @staticmethod
+    def configure(project_token: str, user_secret: Optional[str] = None) -> None:
+        global _override_project_token, _override_user_secret, _warned_incomplete_env
+        global _hydration_cache_token, _hydration_cache_raw, _local_session_id
+        _override_project_token = project_token
+        if user_secret is not None:
+            _override_user_secret = user_secret
+        _warned_incomplete_env = False
+        _local_session_id = None
+        with _hydrate_lock:
+            _hydration_cache_token = None
+            _hydration_cache_raw = None
+
+    @staticmethod
+    def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
+        trimmed = project_token.strip()
+        if not trimmed:
+            raise ValueError("AuraServer.sync_from_secret: project token cannot be empty.")
+
+        AuraServer.configure(trimmed, user_secret)
+        raw = fetch_proj_auth_payload(trimmed)
+        project_id_raw = raw.get("project_id")
+        session_raw = raw.get("session")
+        project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
+        session = session_raw.strip() if isinstance(session_raw, str) else ""
+        if not project_id or not session:
+            raise ValueError(
+                "AuraServer.sync_from_secret: proj_auth response missing project id or session."
+            )
+        with _hydrate_lock:
+            global _hydration_cache_token, _hydration_cache_raw
+            _hydration_cache_token = trimmed
+            _hydration_cache_raw = raw
+
+    @staticmethod
+    def log(type: str, message: str, location: Optional[str] = None, data: Any = None) -> None:
+        aura_log(type, message, location, data)
+
+    @staticmethod
+    def close_socket(timeout_ms: int = 1000) -> None:
+        _ = timeout_ms
         close_aura_log_socket()

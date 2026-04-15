@@ -10,7 +10,7 @@ From [PyPI](https://pypi.org/) (once published):
 pip install auralogger
 ```
 
-From a local checkout of this repo (path must point at the folder that contains `pyproject.toml`):
+From a developer checkout of this project (path must point at the folder that contains `pyproject.toml`):
 
 ```bash
 pip install -e ./python
@@ -32,6 +32,18 @@ auralogger server-check
 ```
 
 The **`aura_log()`** library function reads **`os.environ` only**; it does not load `.env` files. In a web app, load env in your own startup code or rely on your host.
+
+## Naming parity with Node
+
+Python keeps snake_case naming, but key public names map directly to Node concepts:
+
+| Node symbol | Python symbol(s) |
+|-------------|------------------|
+| `AuraServer` | `AuraServer` and `aura_log(...)` |
+| `AuraServer.log(...)` | `AuraServer.log(...)` and `aura_log(...)` |
+| `AuraServer.closeSocket(...)` | `AuraServer.close_socket(...)` and `close_aura_log_socket()` |
+| `fetchProjAuthConfig(...)` | `fetch_proj_auth_config(...)` (`fetch_proj_auth_payload(...)` remains supported) |
+| `AuraClient` / `clientlog(...)` | Not yet exposed as a Python library API |
 
 ## Commands
 

@@ -1,6 +1,6 @@
 """Public API barrel (mirrors node/src/index.ts)."""
 
-from auralogger.aura_log import aura_log, close_aura_log_socket
+from auralogger.aura_log import AuraServer, aura_log, close_aura_log_socket
 from auralogger.backend_origin import (
     build_create_browser_logs_url,
     build_proj_auth_url,
@@ -22,11 +22,12 @@ from auralogger.log_styles import (
     style_map_from_config_entries,
 )
 from auralogger.parser import ParsedFilter, ParsedGetLogsCommand, parse_command
-from auralogger.proj_auth import fetch_proj_auth_payload
+from auralogger.proj_auth import fetch_proj_auth_config, fetch_proj_auth_payload
 
 __all__ = [
     "aura_log",
     "close_aura_log_socket",
+    "AuraServer",
     "log",
     "run_get_logs",
     "normalize_and_validate_filters",
@@ -41,6 +42,7 @@ __all__ = [
     "build_style_entries_from_api",
     "resolve_log_style_spec",
     "style_map_from_config_entries",
+    "fetch_proj_auth_config",
     "fetch_proj_auth_payload",
     "build_proj_auth_url",
     "build_project_logs_url",

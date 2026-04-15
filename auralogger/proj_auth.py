@@ -47,3 +47,13 @@ def fetch_proj_auth_payload(project_token: str) -> Dict[str, Any]:
         raise ValueError("Authentication response had an unexpected shape.")
 
     return cast(Dict[str, Any], auth_response)
+
+
+def fetch_proj_auth_config(project_token: str) -> Dict[str, Any]:
+    """
+    Node-parity alias for ``fetch_proj_auth_payload``.
+
+    Mirrors the Node SDK naming (`fetchProjAuthConfig`) while preserving
+    Python's existing public function name for backward compatibility.
+    """
+    return fetch_proj_auth_payload(project_token)

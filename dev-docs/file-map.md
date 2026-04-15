@@ -3,7 +3,19 @@
 Use this as a "where to edit" guide.
 
 - `auralogger/__init__.py`
-  - Public API barrel re-exporting programmatic command runners, `fetch_proj_auth_payload`, and URL builders for embedders/tests
+  - Public API barrel re-exporting programmatic command runners, `fetch_proj_auth_payload`, `fetch_proj_auth_config`, `AuraServer`, and URL builders for embedders/tests
+
+## Node → Python naming map
+
+Use these pairs when keeping Python terminology close to Node while preserving Python style.
+
+| Node symbol | Python symbol(s) |
+|-------------|------------------|
+| `AuraServer` | `AuraServer` and `aura_log(...)` |
+| `AuraServer.log(...)` | `AuraServer.log(...)` and `aura_log(...)` |
+| `AuraServer.closeSocket(...)` | `AuraServer.close_socket(...)` and `close_aura_log_socket()` |
+| `fetchProjAuthConfig(...)` | `fetch_proj_auth_config(...)` (`fetch_proj_auth_payload(...)` remains supported) |
+| `AuraClient` / `clientlog(...)` | Not yet exposed as a Python library surface (CLI checks exist) |
 
 ## CLI entrypoint
 

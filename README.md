@@ -31,6 +31,8 @@ auralogger init
 auralogger server-check
 ```
 
+`server-check` and `client-check` now follow the same credential UX as `init`: if token or user secret is missing after `.env` load, the CLI prompts for missing values before running checks.
+
 The **`aura_log()`** library function reads **`os.environ` only**; it does not load `.env` files. In a web app, load env in your own startup code or rely on your host.
 
 ## Naming parity with Node
@@ -57,6 +59,11 @@ auralogger get-logs [filters...]
 ```
 
 Filter syntax: **`user-docs/commands.md`**.
+
+`auralogger init` now has two Node-parity UX branches:
+
+- If token + user secret + session are already in env, it prints an "already configured" success path and Python server integration snippet without re-calling `proj_auth`.
+- Otherwise it fetches `proj_auth`, prints copy-paste env lines, and then prints the same integration snippet plus a frontend pointer (`auralogger-cli/client`).
 
 ## Requirements
 

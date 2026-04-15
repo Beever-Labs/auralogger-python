@@ -30,30 +30,36 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 
 - `auralogger/commands/init.py`
   - `auralogger init`
-  - Resolves project token + user secret, `POST /api/{project_token}/proj_auth` (token in path only), Node-aligned copy-paste env block
+  - Early success path when token + user secret + session already exist; otherwise resolves token + secret, `POST /api/{project_token}/proj_auth` (token in path only), prints Node-aligned env block + Python server snippet
 
 - `auralogger/commands/server_check.py`
   - `auralogger server-check`
-  - `proj_auth` then `WS /{project_token}/create_log` with `Authorization: Bearer <user_secret>` and a test JSON frame
+  - Uses shared CLI context resolver (env/prompt + `proj_auth` hydration), then `WS /{project_token}/create_log` with `Authorization: Bearer <user_secret>` and one test JSON frame
 
 - `auralogger/commands/client_check.py`
   - `auralogger client-check`
-  - `proj_auth` then `WS /{project_token}/create_browser_logs` with path-only auth and one test JSON frame
+  - Uses the same shared CLI context resolver as `server-check`, then `WS /{project_token}/create_browser_logs` with path-only auth and one test JSON frame
 
 - `auralogger/commands/test_serverlog.py`
   - `auralogger test-serverlog`
-  - Sends 5 logs via `aura_log(...)`, then closes the cached server socket
+  - Resolves token + secret (env/prompt), syncs runtime via `AuraServer.sync_from_secret(...)`, sends 5 logs via `aura_log(...)`, then closes the cached server socket
 
 - `auralogger/commands/test_clientlog.py`
   - `auralogger test-clientlog`
-  - `proj_auth`, single `create_browser_logs` socket, 5 JSON frames, close
+  - Resolves project token (env/prompt), then `proj_auth`, single `create_browser_logs` socket, 5 JSON frames, close
 
 - `auralogger/commands/get_logs_cmd.py`
   - Thin wrapper → `get_logs.run_get_logs`
 
 ## Shared CLI resolution
 
-- `auralogger/cli_auth.py` — env or interactive resolution for project token and user secret
+- `auralogger/cli_auth.py` — env or interactive resolution for project token/user secret plus shared `resolve_project_context_for_cli_checks()`
+
+## Namespaced compatibility exports
+
+- `auralogger/server/__init__.py` — server runtime re-exports (`AuraServer`, `aura_log`, `close_aura_log_socket`)
+- `auralogger/client/__init__.py` — client-related CLI helper re-exports (`run_client_check`, `run_test_clientlog`)
+- `auralogger/utils/__init__.py` — URL/env/error utility re-exports for stable namespaced imports
 
 ## Configuration (os.environ)
 

@@ -50,7 +50,7 @@ auralogger init
 
 ## `auralogger server-check`
 
-**Requirements:** `AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET` (after CLI `.env` load). Calls `proj_auth`, then opens `WS /{project_token}/create_log` with **`Authorization: Bearer <user_secret>`** and sends one test log frame.
+**Credentials:** if `AURALOGGER_PROJECT_TOKEN` or `AURALOGGER_USER_SECRET` is missing after CLI `.env` load, the CLI prompts for missing values (same behavior as `init`). Calls `proj_auth`, then opens `WS /{project_token}/create_log` with **`Authorization: Bearer <user_secret>`** and sends one test log frame.
 
 ```bash
 auralogger server-check
@@ -111,7 +111,7 @@ auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
 
 ## `auralogger client-check`
 
-**Requirements:** `AURALOGGER_PROJECT_TOKEN`. Calls `proj_auth` to resolve `session`, then opens `WS /{project_token}/create_browser_logs` with **no auth headers** (path-only auth) and sends one test frame.
+**Credentials:** uses the same prompt flow as `server-check` / `init` for missing token/user-secret values, then calls `proj_auth` to resolve `session` and opens `WS /{project_token}/create_browser_logs` with **no auth headers** (path-only auth) and sends one test frame.
 
 ```bash
 auralogger client-check
@@ -121,7 +121,7 @@ auralogger client-check
 
 ## `auralogger test-serverlog`
 
-**Requirements:** same as real server logging (`AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET`, and reachable API when hydration is needed). Sends 5 logs via `aura_log(...)`, waits briefly, then closes the cached socket.
+**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET` values, runs `AuraServer.sync_from_secret(...)` once, then sends 5 logs via `aura_log(...)`, waits briefly, and closes the cached socket.
 
 ```bash
 auralogger test-serverlog
@@ -131,7 +131,7 @@ auralogger test-serverlog
 
 ## `auralogger test-clientlog`
 
-**Requirements:** `AURALOGGER_PROJECT_TOKEN`. Calls `proj_auth` to resolve `session`, opens one `create_browser_logs` socket (path-only auth), sends 5 frames, then closes.
+**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN`, calls `proj_auth` to resolve `session`, opens one `create_browser_logs` socket (path-only auth), sends 5 frames, then closes.
 
 ```bash
 auralogger test-clientlog

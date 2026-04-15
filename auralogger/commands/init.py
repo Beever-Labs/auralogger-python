@@ -100,7 +100,16 @@ def print_copy_paste_env_block(
 def _build_server_integration_snippet() -> str:
     return "\n".join(
         [
+            "import os",
+            "from typing import Any, Dict, Literal, Optional",
+            "from pydantic import BaseModel, Field",
             "from auralogger import AuraServer",
+            "",
+            "class LogInputs(BaseModel):",
+            "    type: Literal['debug', 'info', 'warn', 'error'] = 'info'",
+            "    message: str = Field(..., min_length=1)",
+            "    location: Optional[str] = None",
+            "    data: Optional[Dict[str, Any]] = None",
             "",
             "def configure_auralogger() -> None:",
             "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
@@ -109,11 +118,13 @@ def _build_server_integration_snippet() -> str:
             "        raise RuntimeError('Missing Auralogger server env variables')",
             "    AuraServer.sync_from_secret(project_token, user_secret)",
             "",
-            "def log_checkout_error(order_id: str, error: str) -> None:",
-            "    AuraServer.log('error', 'checkout failed', 'payments/checkout', {",
-            "        'order_id': order_id,",
-            "        'error': error,",
-            "    })",
+            "def auralog(loginputs: LogInputs) -> None:",
+            "    AuraServer.log(",
+            "        loginputs.type,",
+            "        loginputs.message,",
+            "        loginputs.location,",
+            "        loginputs.data,",
+            "    )",
         ]
     )
 

@@ -1,6 +1,7 @@
 """CLI entrypoint for `auralogger` (mirrors node/src/bin/auralogger.ts)."""
 
 import sys
+from typing import TextIO
 
 from auralogger.cli_load_env import load_cli_env_files
 from auralogger.commands.client_check import run_client_check
@@ -11,16 +12,16 @@ from auralogger.commands.test_clientlog import run_test_clientlog
 from auralogger.commands.test_serverlog import run_test_serverlog
 
 
-def print_usage() -> None:
-    print("Usage:")
-    print("  auralogger init")
-    print("  auralogger server-check")
-    print("  auralogger client-check")
-    print("  auralogger test-serverlog")
-    print("  auralogger test-clientlog")
-    print("  auralogger get-logs [filters...]")
-    print("")
-    print("See user-docs/commands.md (in the python package source tree) for filter syntax.")
+def print_usage(stream: TextIO = sys.stdout) -> None:
+    print("Usage:", file=stream)
+    print("  auralogger init", file=stream)
+    print("  auralogger server-check", file=stream)
+    print("  auralogger client-check", file=stream)
+    print("  auralogger test-serverlog", file=stream)
+    print("  auralogger test-clientlog", file=stream)
+    print("  auralogger get-logs [filters...]", file=stream)
+    print("", file=stream)
+    print("See user-docs/commands.md (in the python package source tree) for filter syntax.", file=stream)
 
 
 def main() -> None:
@@ -58,7 +59,11 @@ def main() -> None:
         return
 
     print(f"Unknown command: {command}", file=sys.stderr)
-    print_usage()
+    print(
+        "Valid commands: init, server-check, client-check, test-serverlog, test-clientlog, get-logs",
+        file=sys.stderr,
+    )
+    print_usage(sys.stderr)
     sys.exit(1)
 
 

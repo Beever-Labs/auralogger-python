@@ -31,6 +31,11 @@ dependencies = [
   "websocket-client>=1.6.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+]
+
 [project.urls]
 Homepage = "https://auralogger.com"
 Documentation = "https://auralogger.com"

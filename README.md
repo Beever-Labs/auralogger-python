@@ -50,9 +50,24 @@ Filter syntax: **`user-docs/commands.md`**.
 
 Python 3.8+, `websocket-client`, and `python-dotenv` (declared in `pyproject.toml`).
 
+## Contributor setup
+
+Install editable package + development tooling (currently Ruff):
+
+```bash
+cd python
+pip install -e ".[dev]"
+```
+
 ## Publishing (maintainers)
 
-From this directory, after configuring PyPI credentials (`twine`):
+Releases are automated through `.github/workflows/python-publish.yml`.
+
+- The workflow runs on GitHub release publish events only when the tag matches `python-v*` (for example, `python-v0.1.1`), or through manual `workflow_dispatch`.
+- Configure repository secret `PYPI_API_TOKEN` with a PyPI API token.
+- Before tagging, bump `version` in `python/pyproject.toml` and update `python/CHANGELOG.md`.
+
+Manual fallback from this directory, after configuring PyPI credentials (`twine`):
 
 ```bash
 python -m pip install build twine

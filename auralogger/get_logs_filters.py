@@ -1,7 +1,7 @@
 """Filter normalization for POST /api/{project_token}/logs (mirrors node get-logs-filters)."""
 
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from auralogger.parser import ParsedFilter
 

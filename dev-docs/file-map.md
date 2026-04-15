@@ -2,6 +2,9 @@
 
 Use this as a "where to edit" guide.
 
+- `auralogger/__init__.py`
+  - Public API barrel re-exporting programmatic command runners, `fetch_proj_auth_payload`, and URL builders for embedders/tests
+
 ## CLI entrypoint
 
 - `auralogger/cli_load_env.py`

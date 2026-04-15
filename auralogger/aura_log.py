@@ -134,7 +134,7 @@ def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
 
     need_fetch = not pid or not sess or styles is None
 
-    if need:
+    if need_fetch:
         raw = _fetch_proj_auth_cached(project_token)
         if raw is None:
             return None

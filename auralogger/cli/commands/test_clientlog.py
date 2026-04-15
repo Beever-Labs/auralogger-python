@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from auralogger.client.client_log import AuraClient, close_client_log_socket
-from auralogger.cli_auth import resolve_project_token_for_init
+from auralogger.cli.cli_auth import resolve_project_token_for_init
 
 
 def run_test_clientlog() -> None:

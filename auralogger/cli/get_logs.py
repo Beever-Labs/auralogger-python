@@ -8,15 +8,15 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Mapping, Tuple, cast
 
-from auralogger.backend_origin import build_project_logs_url, resolve_api_base_url
-from auralogger.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
-from auralogger.env_config import try_parse_resolved_styles
-from auralogger.get_logs_filters import normalize_and_validate_filters
-from auralogger.http_utils import parse_error_body
-from auralogger.log_print import print_log
-from auralogger.log_styles import build_style_entries_from_api
-from auralogger.parser import parse_command
-from auralogger.proj_auth import fetch_proj_auth_payload
+from auralogger.cli.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
+from auralogger.cli.get_logs_filters import normalize_and_validate_filters
+from auralogger.cli.log_print import print_log
+from auralogger.cli.log_styles import build_style_entries_from_api
+from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.utils.backend_origin import build_project_logs_url, resolve_api_base_url
+from auralogger.utils.env_config import try_parse_resolved_styles
+from auralogger.utils.http_utils import parse_error_body
+from auralogger.utils.parser import parse_command
 
 
 def _is_record(value: object) -> bool:

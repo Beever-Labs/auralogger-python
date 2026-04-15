@@ -42,7 +42,7 @@ Homepage = "https://auralogger.com"
 Documentation = "https://auralogger.com"
 
 [project.scripts]
-auralogger = "auralogger.cli:_entrypoint"
+auralogger = "auralogger.cli.cli:_entrypoint"
 
 [tool.setuptools.packages.find]
 where = ["."]

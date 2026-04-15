@@ -13,11 +13,11 @@ import websocket
 from pydantic import BaseModel, Field
 from websocket import create_connection
 
-from auralogger.backend_origin import build_create_browser_logs_url, resolve_ws_base_url
-from auralogger.env_config import get_resolved_project_token, try_parse_resolved_styles
-from auralogger.log_print import print_log
-from auralogger.log_styles import build_style_entries_from_api
-from auralogger.proj_auth import fetch_proj_auth_payload
+from auralogger.cli.log_print import print_log
+from auralogger.cli.log_styles import build_style_entries_from_api
+from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.utils.backend_origin import build_create_browser_logs_url, resolve_ws_base_url
+from auralogger.utils.env_config import get_resolved_project_token, try_parse_resolved_styles
 
 UNKNOWN_TYPE = "unknown"
 CONNECT_TIMEOUT_S = 5

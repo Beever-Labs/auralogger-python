@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 import websocket
 from websocket import create_connection
 
-from auralogger.backend_origin import (
+from auralogger.cli.cli_auth import resolve_project_context_for_cli_checks
+from auralogger.utils.backend_origin import (
     build_create_browser_logs_url,
     resolve_ws_base_url,
 )
-from auralogger.cli_auth import resolve_project_context_for_cli_checks
 
 CONNECT_TIMEOUT_S = 5
 

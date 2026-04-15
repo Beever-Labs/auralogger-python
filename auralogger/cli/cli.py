@@ -3,13 +3,13 @@
 import sys
 from typing import TextIO
 
-from auralogger.cli_load_env import load_cli_env_files
-from auralogger.commands.client_check import run_client_check
-from auralogger.commands.get_logs_cmd import run_get_logs_command
-from auralogger.commands.init import run_init
-from auralogger.commands.server_check import run_server_check
-from auralogger.commands.test_clientlog import run_test_clientlog
-from auralogger.commands.test_serverlog import run_test_serverlog
+from auralogger.cli.cli_load_env import load_cli_env_files
+from auralogger.cli.commands.client_check import run_client_check
+from auralogger.cli.commands.get_logs_cmd import run_get_logs_command
+from auralogger.cli.commands.init import run_init
+from auralogger.cli.commands.server_check import run_server_check
+from auralogger.cli.commands.test_clientlog import run_test_clientlog
+from auralogger.cli.commands.test_serverlog import run_test_serverlog
 
 
 def print_usage(stream: TextIO = sys.stdout) -> None:

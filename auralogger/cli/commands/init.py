@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, cast
 
-from auralogger.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
-from auralogger.env_config import (
+from auralogger.cli.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
+from auralogger.cli.log_styles import build_style_entries_from_api
+from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.utils.env_config import (
     ENV_NEXT_PUBLIC_PROJECT_TOKEN,
     ENV_PROJECT_SESSION,
     ENV_PROJECT_TOKEN,
@@ -17,8 +19,6 @@ from auralogger.env_config import (
     get_resolved_session,
     is_full_runtime_env_configured,
 )
-from auralogger.log_styles import build_style_entries_from_api
-from auralogger.proj_auth import fetch_proj_auth_payload
 
 
 def _user_secret_explicitly_in_env() -> bool:

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from auralogger.cli_load_env import load_cli_env_files
+from auralogger.cli.cli_load_env import load_cli_env_files
 
 
 class TestCliLoadEnv(unittest.TestCase):

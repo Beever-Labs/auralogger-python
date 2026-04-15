@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manual smoke test for ``auralogger.aura_log``: styled console output and optional WebSocket ingest.
+Manual smoke test for ``auralogger.server.aura_log``: styled console output and optional WebSocket ingest.
 
 Run from the ``python/`` directory after install::
 

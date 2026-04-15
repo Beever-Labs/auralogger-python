@@ -10,7 +10,7 @@ class CliUnknownCommandTests(unittest.TestCase):
     def test_unknown_command_prints_help_and_exits_one(self) -> None:
         stderr = io.StringIO()
 
-        with patch("auralogger.cli.load_cli_env_files"), patch(
+        with patch("auralogger.cli.cli.load_cli_env_files"), patch(
             "sys.argv", ["auralogger", "wat"]
         ), redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as exit_ctx:

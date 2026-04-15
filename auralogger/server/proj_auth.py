@@ -7,8 +7,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, cast
 
-from auralogger.backend_origin import build_proj_auth_url, resolve_api_base_url
-from auralogger.http_utils import parse_error_body
+from auralogger.utils.backend_origin import build_proj_auth_url, resolve_api_base_url
+from auralogger.utils.http_utils import parse_error_body
 
 
 def fetch_proj_auth_payload(project_token: str) -> Dict[str, Any]:

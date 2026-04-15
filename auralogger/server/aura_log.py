@@ -12,16 +12,16 @@ from typing import Any, Dict, Optional
 import websocket
 from websocket import create_connection
 
-from auralogger.backend_origin import resolve_ws_base_url
-from auralogger.env_config import (
+from auralogger.cli.log_print import print_log
+from auralogger.cli.log_styles import build_style_entries_from_api
+from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.utils.backend_origin import resolve_ws_base_url
+from auralogger.utils.env_config import (
     get_resolved_project_token,
     get_resolved_session,
     get_resolved_user_secret,
     try_parse_resolved_styles,
 )
-from auralogger.log_print import print_log
-from auralogger.log_styles import build_style_entries_from_api
-from auralogger.proj_auth import fetch_proj_auth_payload
 
 UNKNOWN_TYPE = "unknown"
 CONNECT_TIMEOUT_S = 5
@@ -144,7 +144,7 @@ def _resolve_user_secret_runtime() -> Optional[str]:
 
 
 def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
-    from auralogger.env_config import get_resolved_project_id
+    from auralogger.utils.env_config import get_resolved_project_id
 
     pid = (get_resolved_project_id() or "").strip()
     sess = (get_resolved_session() or "").strip()

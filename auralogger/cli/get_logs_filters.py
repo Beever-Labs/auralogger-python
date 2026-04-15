@@ -3,7 +3,7 @@
 import math
 from typing import Any, Dict, List
 
-from auralogger.parser import ParsedFilter
+from auralogger.utils.parser import ParsedFilter
 
 MAX_MAXCOUNT = 100
 

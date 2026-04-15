@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from auralogger.backend_origin import (
+from auralogger.utils.backend_origin import (
     build_create_browser_logs_url,
     build_proj_auth_url,
     build_project_logs_url,
@@ -30,7 +30,7 @@ class TestBackendUrls(unittest.TestCase):
 
 class TestGetLogsPost(unittest.TestCase):
     def test_post_logs_uses_user_secret_headers(self) -> None:
-        from auralogger.get_logs import _post_logs
+        from auralogger.cli.get_logs import _post_logs
 
         captured: dict = {}
 
@@ -70,7 +70,7 @@ class TestGetLogsPost(unittest.TestCase):
 
 class TestProjAuthFetch(unittest.TestCase):
     def test_fetch_no_auth_header(self) -> None:
-        from auralogger.proj_auth import fetch_proj_auth_payload
+        from auralogger.server.proj_auth import fetch_proj_auth_payload
 
         captured: dict = {}
 

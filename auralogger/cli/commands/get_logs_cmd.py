@@ -2,7 +2,7 @@
 
 from typing import List
 
-from auralogger.get_logs import run_get_logs
+from auralogger.cli.get_logs import run_get_logs
 
 
 def run_get_logs_command(argv: List[str]) -> None:

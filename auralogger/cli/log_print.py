@@ -3,7 +3,7 @@
 import sys
 from typing import Any, Mapping
 
-from auralogger.log_styles import resolve_log_style_spec
+from auralogger.cli.log_styles import resolve_log_style_spec
 
 
 def _rgb(text: str, rgb: Any) -> str:

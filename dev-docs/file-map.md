@@ -86,4 +86,4 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 
 ## Supporting modules
 
-- `auralogger/http_utils.py`, `log.py`, `log_print.py`, `log_styles.py`
+- `auralogger/utils/http_utils.py`, `auralogger/cli/log_print.py`, `auralogger/cli/log_styles.py`

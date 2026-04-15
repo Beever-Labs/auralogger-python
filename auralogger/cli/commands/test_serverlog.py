@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time
 
-from auralogger.aura_log import AuraServer, aura_log, close_aura_log_socket
-from auralogger.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
+from auralogger.cli.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
+from auralogger.server.aura_log import AuraServer, aura_log, close_aura_log_socket
 
 
 def run_test_serverlog() -> None:

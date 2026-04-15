@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, cast
 
-from auralogger.env_config import ENV_PROJECT_TOKEN
-from auralogger.env_config import (
+from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.utils.env_config import ENV_PROJECT_TOKEN
+from auralogger.utils.env_config import (
     ENV_USER_SECRET,
     get_resolved_project_token,
     get_resolved_user_secret,
 )
-from auralogger.proj_auth import fetch_proj_auth_payload
 
 
 @dataclass(frozen=True)

@@ -7,8 +7,8 @@ from auralogger.client.client_log import (
     client_log,
     close_client_log_socket,
 )
-from auralogger.commands.client_check import run_client_check
-from auralogger.commands.test_clientlog import run_test_clientlog
+from auralogger.cli.commands.client_check import run_client_check
+from auralogger.cli.commands.test_clientlog import run_test_clientlog
 
 __all__ = [
     "AuraClient",

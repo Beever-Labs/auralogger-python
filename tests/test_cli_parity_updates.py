@@ -5,10 +5,10 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from auralogger.cli_auth import CliProjectContext, resolve_project_context_for_cli_checks
-from auralogger.commands.client_check import run_client_check
-from auralogger.commands.init import run_init
-from auralogger.commands.server_check import run_server_check
+from auralogger.cli.cli_auth import CliProjectContext, resolve_project_context_for_cli_checks
+from auralogger.cli.commands.client_check import run_client_check
+from auralogger.cli.commands.init import run_init
+from auralogger.cli.commands.server_check import run_server_check
 
 
 class _FakeSocket:
@@ -26,11 +26,11 @@ class _FakeSocket:
 class CliContextResolverTests(unittest.TestCase):
     def test_resolve_project_context_for_cli_checks_success(self) -> None:
         with patch(
-            "auralogger.cli_auth.resolve_project_token_for_init", return_value="ptok"
+            "auralogger.cli.cli_auth.resolve_project_token_for_init", return_value="ptok"
         ), patch(
-            "auralogger.cli_auth.resolve_user_secret_for_init", return_value="usec"
+            "auralogger.cli.cli_auth.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.cli_auth.fetch_proj_auth_payload",
+            "auralogger.cli.cli_auth.fetch_proj_auth_payload",
             return_value={"project_id": "pid-1", "project_name": "proj", "session": "sess-1"},
         ):
             ctx = resolve_project_context_for_cli_checks()
@@ -48,11 +48,11 @@ class CliContextResolverTests(unittest.TestCase):
 
     def test_resolve_project_context_for_cli_checks_validates_required_fields(self) -> None:
         with patch(
-            "auralogger.cli_auth.resolve_project_token_for_init", return_value="ptok"
+            "auralogger.cli.cli_auth.resolve_project_token_for_init", return_value="ptok"
         ), patch(
-            "auralogger.cli_auth.resolve_user_secret_for_init", return_value="usec"
+            "auralogger.cli.cli_auth.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.cli_auth.fetch_proj_auth_payload",
+            "auralogger.cli.cli_auth.fetch_proj_auth_payload",
             return_value={"project_id": "pid-1", "session": ""},
         ):
             with self.assertRaises(ValueError):
@@ -71,13 +71,13 @@ class CliCommandWiringTests(unittest.TestCase):
         fake_ws = _FakeSocket()
 
         with patch(
-            "auralogger.commands.server_check.resolve_project_context_for_cli_checks",
+            "auralogger.cli.commands.server_check.resolve_project_context_for_cli_checks",
             return_value=context,
         ) as resolver, patch(
-            "auralogger.commands.server_check.resolve_ws_base_url",
+            "auralogger.cli.commands.server_check.resolve_ws_base_url",
             return_value="wss://api.auralogger.com",
         ), patch(
-            "auralogger.commands.server_check.create_connection", return_value=fake_ws
+            "auralogger.cli.commands.server_check.create_connection", return_value=fake_ws
         ) as create_conn:
             run_server_check()
 
@@ -99,13 +99,13 @@ class CliCommandWiringTests(unittest.TestCase):
         fake_ws = _FakeSocket()
 
         with patch(
-            "auralogger.commands.client_check.resolve_project_context_for_cli_checks",
+            "auralogger.cli.commands.client_check.resolve_project_context_for_cli_checks",
             return_value=context,
         ) as resolver, patch(
-            "auralogger.commands.client_check.resolve_ws_base_url",
+            "auralogger.cli.commands.client_check.resolve_ws_base_url",
             return_value="wss://api.auralogger.com",
         ), patch(
-            "auralogger.commands.client_check.create_connection", return_value=fake_ws
+            "auralogger.cli.commands.client_check.create_connection", return_value=fake_ws
         ) as create_conn:
             run_client_check()
 
@@ -122,9 +122,9 @@ class InitParityTests(unittest.TestCase):
     def test_run_init_already_configured_skips_proj_auth(self) -> None:
         output = io.StringIO()
         with patch(
-            "auralogger.commands.init.is_full_runtime_env_configured", return_value=True
+            "auralogger.cli.commands.init.is_full_runtime_env_configured", return_value=True
         ), patch(
-            "auralogger.commands.init.fetch_proj_auth_payload"
+            "auralogger.cli.commands.init.fetch_proj_auth_payload"
         ) as fetch_proj_auth, redirect_stdout(output):
             run_init()
 
@@ -136,19 +136,19 @@ class InitParityTests(unittest.TestCase):
     def test_run_init_normal_path_prints_integration_help(self) -> None:
         output = io.StringIO()
         with patch(
-            "auralogger.commands.init.is_full_runtime_env_configured", return_value=False
+            "auralogger.cli.commands.init.is_full_runtime_env_configured", return_value=False
         ), patch(
-            "auralogger.commands.init.get_resolved_project_token", return_value=None
+            "auralogger.cli.commands.init.get_resolved_project_token", return_value=None
         ), patch(
-            "auralogger.commands.init._user_secret_explicitly_in_env", return_value=False
+            "auralogger.cli.commands.init._user_secret_explicitly_in_env", return_value=False
         ), patch(
-            "auralogger.commands.init.get_resolved_session", return_value=None
+            "auralogger.cli.commands.init.get_resolved_session", return_value=None
         ), patch(
-            "auralogger.commands.init.resolve_project_token_for_init", return_value="ptok"
+            "auralogger.cli.commands.init.resolve_project_token_for_init", return_value="ptok"
         ), patch(
-            "auralogger.commands.init.resolve_user_secret_for_init", return_value="usec"
+            "auralogger.cli.commands.init.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.commands.init.fetch_proj_auth_payload",
+            "auralogger.cli.commands.init.fetch_proj_auth_payload",
             return_value={"project_id": "pid-1", "session": "sess-1", "styles": []},
         ), redirect_stdout(output):
             run_init()

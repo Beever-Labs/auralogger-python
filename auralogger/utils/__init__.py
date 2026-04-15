@@ -1,13 +1,13 @@
 """Utility exports for host integration and testing helpers."""
 
-from auralogger.backend_origin import (
+from auralogger.utils.backend_origin import (
     build_create_browser_logs_url,
     build_proj_auth_url,
     build_project_logs_url,
     resolve_api_base_url,
     resolve_ws_base_url,
 )
-from auralogger.env_config import (
+from auralogger.utils.env_config import (
     ENV_NEXT_PUBLIC_PROJECT_TOKEN,
     ENV_PROJECT_ID,
     ENV_PROJECT_SESSION,
@@ -17,7 +17,7 @@ from auralogger.env_config import (
     ENV_USER_SECRET,
     ENV_VITE_PROJECT_TOKEN,
 )
-from auralogger.http_utils import parse_error_body
+from auralogger.utils.http_utils import parse_error_body
 
 __all__ = [
     "build_proj_auth_url",

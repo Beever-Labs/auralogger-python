@@ -20,6 +20,10 @@ def _rgb(text: str, rgb: Any) -> str:
     return text
 
 
+def _dim(text: str) -> str:
+    return f"\033[2m{text}\033[0m"
+
+
 def _print_stdout_line(parts: str) -> None:
     """Avoid UnicodeEncodeError on Windows consoles that default to a legacy code page."""
     try:
@@ -41,9 +45,9 @@ def print_log(log: Mapping[str, Any], config_styles: Any) -> None:
 
     line1 = " ".join(
         (
-            _rgb(str(created), spec.get("time-color")),
+            _dim(_rgb(str(created), spec.get("time-color"))),
             str(icon),
-            _rgb(str(type_disp), spec.get("type-color")),
+            _dim(_rgb(str(type_disp), spec.get("type-color"))),
             _rgb(str(loc), spec.get("location-color")),
         )
     )
@@ -51,3 +55,7 @@ def print_log(log: Mapping[str, Any], config_styles: Any) -> None:
 
     msg = log.get("message")
     _print_stdout_line(_rgb(str(msg if msg is not None else ""), spec.get("message-color")))
+
+    data = log.get("data")
+    if data is not None and str(data).strip():
+        _print_stdout_line(_dim(_rgb(str(data), spec.get("text-color"))))

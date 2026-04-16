@@ -8,7 +8,7 @@ Contributor-oriented notes for the Python `auralogger` package.
 
 ## Project description
 
-`auralogger` (Python): command-line client for Auralogger: `init`, `server-check`, `client-check`, `test-serverlog`, `test-clientlog`, and `get-logs`, plus the `aura_log` helper for Python apps.
+`auralogger` (Python): command-line tool for Auralogger: `init`, `server-check`, `test-serverlog`, and `get-logs`, plus the `aura_log` helper for Python apps.
 
 ```text
 ├── LICENSE

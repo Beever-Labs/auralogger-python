@@ -459,43 +459,6 @@ INIT_ALREADY_STEVE_ASIDES: List[AsideEntry] = [
     },
 ]
 
-INIT_SNIPPET_PETER_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "🕷️",
-        "line": "Peter: Client helper = clean logs, zero secrets leaked. That's the win condition.",
-    },
-]
-
-INIT_SNIPPET_DEADPOOL_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "💀",
-        "line": (
-            "Deadpool: Hey. Yeah you. Thinking of putting secrets in frontend? Don't. That's "
-            "not a bug, that's a career-ending origin story."
-        ),
-    },
-]
-
-INIT_SNIPPET_WOLVERINE_ASIDES: List[AsideEntry] = [
-    {"emoji": "🐺", "line": "Wolverine: Keep the secret on the server. No debate. No exceptions."},
-]
-
-INIT_SNIPPET_THOR_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "⚡",
-        "line": (
-            "Thor: Snippet below — server only. Frontend touches user_secret? That's on you."
-        ),
-    },
-    {
-        "emoji": "🦾",
-        "line": (
-            "Tony: That's server-side only. Don't get creative — user_secret never ships to "
-            "the browser."
-        ),
-    },
-]
-
 GET_LOGS_EMPTY_ASIDES: List[AsideEntry] = [
     {
         "emoji": "💀",
@@ -624,33 +587,6 @@ CHECK_RETRY_ASIDES: List[AsideEntry] = [
     },
 ]
 
-CLIENT_CHECK_START_PETER_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "🕷️",
-        "line": (
-            "Peter: This is how browsers talk. No secret. Just the token. Simple, safe, done."
-        ),
-    },
-    {
-        "emoji": "🕷️",
-        "line": (
-            "Peter: Browser-style tunnel — path has the project token, no Bearer header "
-            "(that's intentional). Matches how a real tab talks to Auralogger."
-        ),
-    },
-]
-
-CLIENT_CHECK_SUCCESS_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "🐺",
-        "line": "Wolverine: It works here. Your app should match it. No excuses.",
-    },
-    {
-        "emoji": "💀",
-        "line": "Deadpool: This passed. Your app didn't. That's not a coincidence.",
-    },
-]
-
 TEST_SERVERLOG_START_BANNER_ASIDES: List[AsideEntry] = [
     {
         "emoji": "💚",
@@ -676,25 +612,6 @@ TEST_SERVERLOG_SUCCESS_MAIN_ASIDES: List[AsideEntry] = [
         "emoji": "💀",
         "line": "Deadpool: Logs are in. If you still can't find the bug… that's a talent.",
     },
-]
-
-TEST_CLIENTLOG_START_ASIDES: List[AsideEntry] = [
-    {
-        "emoji": "🦾",
-        "line": (
-            "Tony: Simulating a browser. Same protocol, cleaner environment. Pay attention to "
-            "what changes."
-        ),
-    },
-    {
-        "emoji": "💀",
-        "line": "Deadpool: It's fake browser time. Don't worry — the bugs are still real.",
-    },
-]
-
-TEST_CLIENTLOG_SUCCESS_ASIDES: List[AsideEntry] = [
-    {"emoji": "🐺", "line": "Wolverine: It worked. Your app should too."},
-    {"emoji": "💀", "line": "Deadpool: This worked. Your app didn't. That's personal."},
 ]
 
 

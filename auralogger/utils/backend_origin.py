@@ -50,9 +50,3 @@ def build_project_logs_url(api_base_url: str, project_token: str) -> str:
     """``POST /api/{project_token}/logs`` — headers ``secret`` + ``user_secret`` = user secret."""
     base = trim_trailing_slash(api_base_url.strip())
     return f"{base}/api/{_encode_path_token(project_token)}/logs"
-
-
-def build_create_browser_logs_url(ws_base_url: str, project_token: str) -> str:
-    """``WS /{project_token}/create_browser_logs`` — path-only auth for browser ingest."""
-    base = trim_trailing_slash(ws_base_url.strip())
-    return f"{base}/{_encode_path_token(project_token)}/create_browser_logs"

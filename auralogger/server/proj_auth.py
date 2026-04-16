@@ -1,4 +1,4 @@
-"""Shared ``POST .../proj_auth`` client (mirrors node ``fetchProjAuthConfig``)."""
+"""Shared ``POST .../proj_auth`` helper (mirrors node ``fetchProjAuthConfig``)."""
 
 from __future__ import annotations
 

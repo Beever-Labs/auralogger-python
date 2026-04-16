@@ -1,84 +1,59 @@
-# auralogger (Python)
+# Auralogger for Python (SDK + CLI)
 
-Command-line client for [Auralogger](https://auralogger.com): `init`, `server-check`, `client-check`, `test-serverlog`, `test-clientlog`, and `get-logs`, plus the `aura_log` helper for Python apps.
+ a real-time logging and observability SDK and CLI for streaming, storing, searching, and filtering application logs—beautifully visualized and accessible anywhere in the world across terminal, web, and any screen.
 
-```text
-├── LICENSE
-├── pyproject.toml
-├── README.md
-```
+---
 
-## Package naming (Node vs Python)
+## Quick start
 
-- Python distribution name: `auralogger` (install with `pip install auralogger`)
-- Node distribution name: `auralogger-cli` (install with `npm install auralogger-cli`)
-- Both expose the CLI command `auralogger`, but package names on package indexes are intentionally different.
+Run CLI commands from the directory that contains your `.env` or `.env.local` (or wherever you export `AURALOGGER_`* in the shell or CI). The CLI loads `.env` files from the **current working directory** — `cd` into the app first.
 
-## Install
+**Use a project virtualenv** (`python -m venv .venv`) so the CLI and library version match the repo you are in. Auralogger is **project-scoped** (credentials per app), not a global “install once and forget which folder you are in” tool.
 
-From [PyPI](https://pypi.org/) (once published):
+### 1) Install
+
+From PyPI:
 
 ```bash
 pip install auralogger
 ```
 
-From a developer checkout of this project (path must point at the folder that contains `pyproject.toml`):
-
 ```bash
-pip install -e ./python
+auralogger
 ```
 
-## Project directory (important)
+### 2) Run `init` (credentials + server snippet)
 
-The CLI uses **your shell’s current working directory** as the project root. It loads **`.env`** and **`.env.local`** from that directory before each command (same idea as the Node `auralogger` CLI).
-
-Configuration is **environment variables** only — see **`user-docs/environment.md`** for **`AURALOGGER_PROJECT_TOKEN`**, **`AURALOGGER_USER_SECRET`**, and the publishable `AURALOGGER_PROJECT_*` keys. There is no `auralogger.config.json`.
+Get **private** credentials from [auralogger.com](https://auralogger.com), then run this in your app repo (where `.env` should live):
 
 ```bash
-cd /path/to/my-app
 auralogger init
-# add printed lines to .env, then:
+```
+
+`auralogger init` walks you through anything missing, prints a **copy-paste block** for your `.env` (project token, user secret, session — each line skipped if already set), then prints a **small Python module** you can drop into your repo (for example `your_auralog_file.py`) with a ready-made `auralog(...)` helper .
+
+### 3) Sanity-check connectivity
+
+Before you sprinkle `auralog` everywhere, confirm the path works:
+
+```bash
 auralogger server-check
 ```
 
-`server-check` and `client-check` now follow the same credential UX as `init`: if token or user secret is missing after `.env` load, the CLI prompts for missing values before running checks.
+Optional: send a handful of test logs through the same path your app uses:
 
-The **`aura_log()`** library function reads **`os.environ` only**; it does not load `.env` files. In a web app, load env in your own startup code or rely on your host.
-
-## Naming parity with Node
-
-Python keeps snake_case naming, but key public names map directly to Node concepts:
-
-| Node symbol | Python symbol(s) |
-|-------------|------------------|
-| `AuraServer` | `AuraServer` and `aura_log(...)` |
-| `AuraServer.log(...)` | `AuraServer.log(...)` and `aura_log(...)` |
-| `AuraServer.closeSocket(...)` | `AuraServer.close_socket(...)` and `close_aura_log_socket()` |
-| `fetchProjAuthConfig(...)` | `fetch_proj_auth_config(...)` (`fetch_proj_auth_payload(...)` remains supported) |
-| `AuraClient` / `clientlog(...)` | `AuraClient`, `client_log(...)`, and typed `auralog(ClientLogInputs(...))` |
-
-Client SDK quickstart:
-
-```python
-from auralogger.client import AuraClient, ClientLogInputs, auralog
-
-AuraClient.sync_from_secret("project-token")
-auralog(
-    ClientLogInputs(
-        type="info",
-        message="hello from client sdk",
-        location="example/client",
-        data={"source": "python"},
-    )
-)
+```bash
+auralogger test-serverlog
 ```
 
-## Using the generated `auralog(...)` helper
+If token or user secret is missing after `.env` is loaded, the CLI will prompt before running checks.
 
-After `auralogger init`, paste the server snippet into your app (for example `your_server_auralog_file.py`), then use it like this:
+### 4) Send logs from code
+
+Run `auralogger init` once and paste the printed module, or follow this shape: configure once (reads `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` from the environment), then call your helper.
 
 ```python
-from your_server_auralog_file import auralog
+from your_auralog_file import auralog
 
 auralog(
     "info",
@@ -95,33 +70,108 @@ auralog("error", "Payment gateway timeout", data={"provider": "stripe"})
 # expected: [error] Payment gateway timeout {"provider": "stripe"}
 ```
 
-## Commands
+**Important:** the logging helper reads `**os.environ` only** — it does not load `.env` files by itself. In Django, FastAPI, Celery, etc., load env in your normal startup path (or rely on your host injecting variables).
 
-```text
-auralogger init
-auralogger server-check
-auralogger client-check
-auralogger test-serverlog
-auralogger test-clientlog
-auralogger get-logs [filters...]
+### 5) Fetch logs in the terminal
+
+```bash
+auralogger get-logs -maxcount 20
 ```
 
-Filter syntax: **`user-docs/commands.md`**.
+Each run performs **one** HTTP request and prints the `logs` array from that response. Use `**-maxcount`** (capped at **100** in the CLI) and `**-skip`** to page manually across separate runs or a small script. Full filter grammar, every field, and examples are in **CLI commands (reference)** below.
 
-`auralogger init` now has two Node-parity UX branches:
+---
 
-- If token + user secret + session are already in env, it prints an "already configured" success path and Python server integration snippet without re-calling `proj_auth`.
-- Otherwise it fetches `proj_auth`, prints copy-paste env lines, and then prints the same integration snippet plus a frontend pointer (`auralogger-cli/client`).
+## CLI commands (reference)
+
+Subcommands for the `auralogger` entrypoint, then `**get-logs`** filters (same grammar as the Node CLI). Environment variable spellings: `[user-docs/environment.md](user-docs/environment.md)`.
+
+### Invocation
+
+```bash
+auralogger <command> [arguments...]
+```
+
+Run `auralogger --help` to see all commands and options.
+
+### Commands (only `get-logs` takes extra filter tokens)
+
+
+| Command          | Arguments      | What it does                                                                                                                                                                                                                      |
+| ---------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`           | —              | Prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET`, prints copy-paste `.env` lines (token, user secret, session), then a **Python** server integration snippet with `sync_from_secret` and `auralog(...)`. |
+| `server-check`   | —              | One **server-side** test log over WebSocket; prompts for missing token or user secret if needed.                                                                                                                                  |
+| `test-serverlog` | —              | Calls `sync_from_secret`, sends **5** logs via `aura_log`, then closes the cached socket.                                                                                                                                         |
+| `get-logs`       | `[filters...]` | `POST` to project logs with token + user secret (env or prompt). If styles are not in env, the CLI resolves them for that run so terminal colors match the dashboard when possible.                                               |
+
+
+### `get-logs` filter grammar
+
+```text
+-<field> [--<operator>] <json-value>
+```
+
+- The token after the field name must be **valid JSON**.
+- `**maxcount`** and `**skip`**: value must be a JSON **number**.
+- **All other fields**: value must be a JSON **array**.
+
+**Paging:** one CLI invocation → one request → one page of logs. There is **no** automatic multi-page loop inside the CLI.
+
+#### Fields and operators
+
+
+| Field         | Allowed operators          | Default operator | Value shape                                                                                                                          |
+| ------------- | -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`        | `in`, `not-in`             | `in`             | JSON array of type strings                                                                                                           |
+| `message`     | `contains`, `not-contains` | `contains`       | JSON array of substrings                                                                                                             |
+| `location`    | `in`, `not-in`             | `in`             | JSON array of location strings                                                                                                       |
+| `time`        | `since`, `from-to`         | `since`          | JSON array (e.g. `["10m"]` for `since`; use `from-to` with a pair when supported)                                                    |
+| `order`       | `eq`                       | `eq`             | JSON array: `["newest-first"]` or `["oldest-first"]`                                                                                 |
+| `maxcount`    | `eq`                       | `eq`             | JSON number, clamped to `0..100`                                                                                                     |
+| `skip`        | `eq`                       | `eq`             | JSON number, floored, minimum `0`                                                                                                    |
+| `session`     | `eq`                       | `eq`             | JSON array of session strings. If `AURALOGGER_PROJECT_SESSION` is set and you omit `-session`, the CLI prepends this filter for you. |
+| `data.<path>` | `eq`                       | `eq`             | JSON array — filter on nested `data` using a dot path (e.g. `data.userId`)                                                           |
+
+
+If you omit `--<operator>`, the default operator for that field is used (for example `-type '["error"]'` is the same as `-type --in '["error"]'`).
+
+#### Examples
+
+```bash
+auralogger get-logs -type '["error","warn"]' -maxcount 50
+auralogger get-logs -message '["timeout"]' -skip 20 -maxcount 30
+auralogger get-logs -type --not-in '["info","debug"]' -time --since '["10m"]'
+auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
+auralogger get-logs -order '["oldest-first"]' -maxcount 25
+```
+
+#### Common parse errors (filters)
+
+- `Expected 'get-logs'`
+- `Expected field at position N`
+- `Missing value for field '…'`
+- `Invalid JSON for field '…'`
+- `Field '…' expects a JSON array token`
+- `Field 'maxcount' expects a JSON number token` (and similarly for `skip`)
+- `Invalid op '…' for field '…'`
+- `Unknown filter field: …`
+
+---
+
+## Browser and frontends
+
+This package is for **Python on the server**. For React, Vue, Next, Vite, or any code bundled for the browser, use the `**auralogger-cli`** npm package and its **client** entry — **project token only** there, never `AURALOGGER_USER_SECRET` in frontend bundles.
+
+---
+
+## When something does not work
+
+- **Wrong directory** — Run the CLI from the folder that contains `.env`, or export variables in the shell.
+- **Logs never reach the dashboard** — Confirm `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` are set for the process (or passed explicitly in your configure step). Successful sends are quiet locally; problems may show as a one-time message on stderr.
+- `**get-logs` looks plain** — Optional style env vars are documented in `[user-docs/environment.md](user-docs/environment.md)`; the CLI can still resolve styling for a run when those are unset.
+
+---
 
 ## Requirements
 
-Python 3.8+, `websocket-client`, and `python-dotenv` (declared in `pyproject.toml`).
-
-## Contributor setup
-
-Install editable package + development tooling (currently Ruff):
-
-```bash
-cd python
-pip install -e ".[dev]"
-```
+Python **3.8+**.

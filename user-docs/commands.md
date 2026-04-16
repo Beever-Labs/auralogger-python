@@ -7,9 +7,7 @@ Full variable reference: **[`environment.md`](environment.md)**.
 ## Setup
 
 - **Python**: version 3.8 or newer.
-- **Install** (pick one):
-  - From PyPI: `pip install auralogger` (when published).
-  - From this repo: `pip install -e ./python` (directory that contains `pyproject.toml`).
+- **Install:** `pip install auralogger`
 
 The CLI loads **`.env`** and **`.env.local`** from your **current working directory** before each command. Run commands from the project root where those files live.
 
@@ -25,15 +23,12 @@ Default API/WebSocket hosts need no URL config unless you override them. See **[
 
 - `auralogger init` — authenticate and print copy-paste env lines.
 - `auralogger server-check` — verify WebSocket connectivity.
-- `auralogger client-check` — verify browser-ingest path-only socket connectivity.
 - `auralogger test-serverlog` — send 5 server logger test logs.
-- `auralogger test-clientlog` — send 5 browser-ingest test logs.
 - `auralogger get-logs [filters...]` — fetch and print logs.
 
-For application/runtime usage (not CLI), Python now exposes an importable client SDK:
-`from auralogger.client import AuraClient, ClientLogInputs, auralog`.
+For application logging from Python, import **`auralogger`** (the logger class) and **`aura_log`** from the **`auralogger`** package (see **`README.md`** in this folder).
 
-If you run an unknown command, the CLI exits with code `1`, prints `Unknown command: <name>`, and shows usage plus valid commands so you can retry quickly.
+If you run an unknown command, the CLI exits with code `1`, prints that the command was not recognized, and shows usage plus valid commands so you can retry quickly.
 
 ---
 
@@ -41,9 +36,9 @@ If you run an unknown command, the CLI exits with code `1`, prints `Unknown comm
 
 **Flags:** none.
 
-**Credentials:** `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` if both set in env; otherwise interactive prompts for whatever is missing. `POST /api/{project_token}/proj_auth` puts the token **in the URL path only** (no `secret` header).
+**Credentials:** `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` if both set in env; otherwise interactive prompts for whatever is missing.
 
-Prints env lines aligned with the Node CLI (token, user secret, session, Next/Vite token aliases). Project id and styles are not in the copy block; runtime code hydrates them via `proj_auth` when needed.
+Prints env lines for the project token, user secret, and session. Project id and styles are not in the copy block; runtime code hydrates them via `proj_auth` when needed.
 
 ```bash
 auralogger init
@@ -53,7 +48,7 @@ auralogger init
 
 ## `auralogger server-check`
 
-**Credentials:** if `AURALOGGER_PROJECT_TOKEN` or `AURALOGGER_USER_SECRET` is missing after CLI `.env` load, the CLI prompts for missing values (same behavior as `init`). Calls `proj_auth`, then opens `WS /{project_token}/create_log` with **`Authorization: Bearer <user_secret>`** and sends one test log frame.
+**Credentials:** if `AURALOGGER_PROJECT_TOKEN` or `AURALOGGER_USER_SECRET` is missing after CLI `.env` load, the CLI prompts for missing values (same behavior as `init`). Sends a single **server-side** test log to verify connectivity from your environment.
 
 ```bash
 auralogger server-check
@@ -61,7 +56,7 @@ auralogger server-check
 
 ---
 
-## `auralogger get-logs [filters...]`
+## `auralogger get-logs`
 
 **Requirements:** `AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET`, and `AURALOGGER_PROJECT_STYLES` (or equivalent style resolution via `proj_auth` for that run).
 
@@ -112,32 +107,12 @@ auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
 
 ---
 
-## `auralogger client-check`
-
-**Credentials:** uses the same prompt flow as `server-check` / `init` for missing token/user-secret values, then calls `proj_auth` to resolve `session` and opens `WS /{project_token}/create_browser_logs` with **no auth headers** (path-only auth) and sends one test frame.
-
-```bash
-auralogger client-check
-```
-
----
-
 ## `auralogger test-serverlog`
 
-**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET` values, runs `AuraServer.sync_from_secret(...)` once, then sends 5 logs via `aura_log(...)`, waits briefly, and closes the cached socket.
+**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET` values, runs `auralogger.sync_from_secret(...)` once, then sends 5 logs via `aura_log(...)`, waits briefly, and closes the cached socket.
 
 ```bash
 auralogger test-serverlog
-```
-
----
-
-## `auralogger test-clientlog`
-
-**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN`, calls `proj_auth` to resolve `session`, opens one `create_browser_logs` socket (path-only auth), sends 5 frames, then closes.
-
-```bash
-auralogger test-clientlog
 ```
 
 ---

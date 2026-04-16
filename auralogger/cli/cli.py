@@ -29,20 +29,16 @@ from auralogger.cli.cli_personality_state import (
 )
 from auralogger.cli.cli_style import bold, bold_hex, dim, hex_color, red, red_bold, white
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
-from auralogger.cli.commands.client_check import run_client_check
 from auralogger.cli.commands.get_logs_cmd import run_get_logs_command
 from auralogger.cli.commands.init import run_init
 from auralogger.cli.commands.server_check import run_server_check
-from auralogger.cli.commands.test_clientlog import run_test_clientlog
 from auralogger.cli.commands.test_serverlog import run_test_serverlog
 
 KNOWN_COMMANDS = {
     "init",
     "get-logs",
     "server-check",
-    "client-check",
     "test-serverlog",
-    "test-clientlog",
 }
 
 
@@ -53,7 +49,7 @@ def print_usage(stream: TextIO = sys.stdout) -> None:
         file=stream,
     )
     print(
-        hex_color("#7ee787", "  init") + dim("           wire up secrets + copy-paste client config"),
+        hex_color("#7ee787", "  init") + dim("           wire up secrets + copy-paste server config"),
         file=stream,
     )
     print(
@@ -61,15 +57,7 @@ def print_usage(stream: TextIO = sys.stdout) -> None:
         file=stream,
     )
     print(
-        hex_color("#7ee787", "  client-check") + dim("   same vibes, browser-style pipe"),
-        file=stream,
-    )
-    print(
         hex_color("#7ee787", "  test-serverlog") + dim("  five fake server logs, just for kicks"),
-        file=stream,
-    )
-    print(
-        hex_color("#7ee787", "  test-clientlog") + dim("  five fake client logs, same deal"),
         file=stream,
     )
     print(
@@ -139,18 +127,8 @@ def main() -> None:
         record_cli_success(command)
         return
 
-    if command == "client-check":
-        run_client_check()
-        record_cli_success(command)
-        return
-
     if command == "test-serverlog":
         run_test_serverlog()
-        record_cli_success(command)
-        return
-
-    if command == "test-clientlog":
-        run_test_clientlog()
         record_cli_success(command)
         return
 

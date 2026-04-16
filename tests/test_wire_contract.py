@@ -6,11 +6,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from auralogger.utils.backend_origin import (
-    build_create_browser_logs_url,
-    build_proj_auth_url,
-    build_project_logs_url,
-)
+from auralogger.utils.backend_origin import build_proj_auth_url, build_project_logs_url
 
 
 class TestBackendUrls(unittest.TestCase):
@@ -22,11 +18,6 @@ class TestBackendUrls(unittest.TestCase):
     def test_logs_path_encodes_token(self) -> None:
         url = build_project_logs_url("https://auralogger.com", "tok")
         self.assertEqual(url, "https://auralogger.com/api/tok/logs")
-
-    def test_create_browser_logs_path_encodes_token(self) -> None:
-        url = build_create_browser_logs_url("wss://api.auralogger.com", "ab/c d")
-        self.assertEqual(url, "wss://api.auralogger.com/ab%2Fc%20d/create_browser_logs")
-
 
 class TestGetLogsPost(unittest.TestCase):
     def test_post_logs_uses_user_secret_headers(self) -> None:

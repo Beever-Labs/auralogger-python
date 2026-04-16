@@ -6,7 +6,6 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from auralogger.cli.cli_auth import CliProjectContext, resolve_project_context_for_cli_checks
-from auralogger.cli.commands.client_check import run_client_check
 from auralogger.cli.commands.init import run_init
 from auralogger.cli.commands.server_check import run_server_check
 
@@ -88,36 +87,6 @@ class CliCommandWiringTests(unittest.TestCase):
         self.assertEqual(len(fake_ws.sent), 1)
         self.assertTrue(fake_ws.closed)
 
-    def test_client_check_uses_shared_context_resolver(self) -> None:
-        context = CliProjectContext(
-            project_token="ptok",
-            user_secret="usec",
-            project_id="pid-1",
-            project_name="proj",
-            session="sess-1",
-        )
-        fake_ws = _FakeSocket()
-
-        with patch(
-            "auralogger.cli.commands.client_check.resolve_project_context_for_cli_checks",
-            return_value=context,
-        ) as resolver, patch(
-            "auralogger.cli.commands.client_check.resolve_ws_base_url",
-            return_value="wss://api.auralogger.com",
-        ), patch(
-            "auralogger.cli.commands.client_check.create_connection", return_value=fake_ws
-        ) as create_conn:
-            run_client_check()
-
-        resolver.assert_called_once_with()
-        create_conn.assert_called_once_with(
-            "wss://api.auralogger.com/ptok/create_browser_logs",
-            timeout=5,
-        )
-        self.assertEqual(len(fake_ws.sent), 1)
-        self.assertTrue(fake_ws.closed)
-
-
 class InitParityTests(unittest.TestCase):
     def test_run_init_already_configured_skips_proj_auth(self) -> None:
         output = io.StringIO()
@@ -131,7 +100,7 @@ class InitParityTests(unittest.TestCase):
         fetch_proj_auth.assert_not_called()
         rendered = output.getvalue()
         self.assertIn("already has token", rendered)
-        self.assertIn("AuraServer", rendered)
+        self.assertIn("auralogger.sync_from_secret", rendered)
 
     def test_run_init_normal_path_prints_integration_help(self) -> None:
         output = io.StringIO()
@@ -155,8 +124,7 @@ class InitParityTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Copy-paste env block", rendered)
-        self.assertIn("Server-side AuraLog", rendered)
-        self.assertIn("auralogger-cli/client", rendered)
+        self.assertIn("auralogger — configure and log", rendered)
 
 
 if __name__ == "__main__":

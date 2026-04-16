@@ -11,10 +11,6 @@ from auralogger.cli.aside_pools import (
     INIT_CURTAIN_TONY_ASIDES,
     INIT_REPEAT_INTENT_ASIDES,
     INIT_SESSION_TONY_ASIDES,
-    INIT_SNIPPET_DEADPOOL_ASIDES,
-    INIT_SNIPPET_PETER_ASIDES,
-    INIT_SNIPPET_THOR_ASIDES,
-    INIT_SNIPPET_WOLVERINE_ASIDES,
     INIT_STRANGE_TOKEN_ASIDES,
     INIT_WELCOME_ASIDES,
     pick_aside,
@@ -23,11 +19,9 @@ from auralogger.cli.cli_auth import resolve_project_token_for_init, resolve_user
 from auralogger.cli.cli_load_env import ensure_utf8_stdio
 from auralogger.cli.cli_personality_state import get_command_attempt_count
 from auralogger.cli.cli_style import (
-    bold_gray,
     bold_hex,
     bold_white,
     dim,
-    gray,
     hex_color,
     white,
 )
@@ -35,11 +29,9 @@ from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, prin
 from auralogger.cli.log_styles import build_style_entries_from_api
 from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.env_config import (
-    ENV_NEXT_PUBLIC_PROJECT_TOKEN,
     ENV_PROJECT_SESSION,
     ENV_PROJECT_TOKEN,
     ENV_USER_SECRET,
-    ENV_VITE_PROJECT_TOKEN,
     format_dotenv_line,
     get_resolved_project_token,
     get_resolved_session,
@@ -109,9 +101,7 @@ def print_copy_paste_env_block(
     print(bold_hex("#79c0ff", "📋 ") + bold_white("Copy-paste env block"))
     print(
         dim(
-            "   Up to five lines when everything’s new: server token, user secret, session, "
-            "then the same token for Next and Vite. Project id + DevTools styles come from "
-            "proj_auth — no .env lines for those."
+            "   Up to three lines when everything’s new: project token, user secret, session."
         )
     )
     print()
@@ -125,11 +115,6 @@ def print_copy_paste_env_block(
         lines.append(format_dotenv_line(ENV_USER_SECRET, user_secret))
     if not session_was_in_env and session_str:
         lines.append(format_dotenv_line(ENV_PROJECT_SESSION, session_str))
-    if not project_token_was_in_env:
-        pt = payload.get("project_token")
-        tok = pt if isinstance(pt, str) else ""
-        lines.append(format_dotenv_line(ENV_NEXT_PUBLIC_PROJECT_TOKEN, tok))
-        lines.append(format_dotenv_line(ENV_VITE_PROJECT_TOKEN, tok))
 
     for line in lines:
         print(hex_color("#8b949e", line))
@@ -138,9 +123,8 @@ def print_copy_paste_env_block(
         print()
         print(
             dim(
-                f"   Token already in env — if your client can’t read it, add "
-                f"{ENV_NEXT_PUBLIC_PROJECT_TOKEN} and {ENV_VITE_PROJECT_TOKEN} with the same "
-                "ciphertext."
+                "   Token already in env — server-side apps should read "
+                f"{ENV_PROJECT_TOKEN} from the environment or your host’s secret store."
             )
         )
 
@@ -150,7 +134,7 @@ def print_copy_paste_env_block(
             print(
                 dim("   ")
                 + white("Project token")
-                + dim(" was already set — server/Next/Vite token lines omitted above.")
+                + dim(" was already set — token line omitted above.")
             )
         if user_secret_was_in_env:
             print(
@@ -172,14 +156,14 @@ def _build_server_integration_snippet() -> str:
         [
             "import os",
             "from typing import Any, Dict, Literal, Optional",
-            "from auralogger import AuraServer",
+            "from auralogger import auralogger",
             "",
             "def configure_auralogger() -> None:",
             "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
             "    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()",
             "    if not project_token or not user_secret:",
-            "        raise RuntimeError('Missing Auralogger server env variables')",
-            "    AuraServer.sync_from_secret(project_token, user_secret)",
+            "        raise RuntimeError('Missing auralogger env variables')",
+            "    auralogger.sync_from_secret(project_token, user_secret)",
             "",
             "def auralog(",
             "    type: Literal['debug', 'info', 'warn', 'error'],",
@@ -187,7 +171,7 @@ def _build_server_integration_snippet() -> str:
             "    location: Optional[str] = None,",
             "    data: Optional[Dict[str, Any]] = None,",
             ") -> None:",
-            "    AuraServer.log(",
+            "    auralogger.log(",
             "        type,",
             "        message,",
             "        location,",
@@ -197,37 +181,10 @@ def _build_server_integration_snippet() -> str:
     )
 
 
-def _build_client_integration_snippet() -> str:
-    return "\n".join(
-        [
-            "from typing import Any, Dict, Literal, Optional",
-            "from pydantic import BaseModel, Field",
-            "from auralogger.client import AuraClient",
-            "",
-            "class ClientLogInputs(BaseModel):",
-            "    type: Literal['debug', 'info', 'warn', 'error'] = 'info'",
-            "    message: str = Field(..., min_length=1)",
-            "    location: Optional[str] = None",
-            "    data: Optional[Dict[str, Any]] = None",
-            "",
-            "def configure_client_logger(project_token: str) -> None:",
-            "    AuraClient.sync_from_secret(project_token)",
-            "",
-            "def auralog(loginputs: ClientLogInputs) -> None:",
-            "    AuraClient.log(",
-            "        loginputs.type,",
-            "        loginputs.message,",
-            "        loginputs.location,",
-            "        loginputs.data,",
-            "    )",
-        ]
-    )
-
-
 def _build_server_usage_snippet() -> str:
     return "\n".join(
         [
-            "from your_server_auralog_file import auralog",
+            "from your_auralog_file import auralog",
             "",
             "auralog(",
             "    'info',",
@@ -246,63 +203,14 @@ def _build_server_usage_snippet() -> str:
     )
 
 
-def print_two_auralog_explainer() -> None:
-    print()
-    print(
-        bold_hex("#d2a8ff", "  🧭 ")
-        + white("Split the stack: ")
-        + bold_white("Auralog")
-        + white(" (browser) vs ")
-        + bold_white("AuraLog")
-        + white(" (server) — ")
-        + bold_white("two files")
-        + dim(", zero crossover episodes.")
-    )
-    print(
-        gray("     ")
-        + hex_color("#ffa657", "🎨 ")
-        + bold_white("Browser / frontend")
-        + gray(" — React, Vue, Next client, whatever ships to users. Want ")
-        + white("pretty DevTools logs")
-        + gray("? This side. ")
-        + dim("Project token only — never the user secret.")
-    )
-    print(
-        gray("     ")
-        + hex_color("#79c0ff", "🧱 ")
-        + bold_white("Server / backend / CLI")
-        + gray(" — APIs, workers, scripts, anything that never touches a phone screen. ")
-        + white("User secret only lives here.")
-    )
-    print()
-
-
-def print_init_helper_snippets_with_character_voices() -> None:
-    a = pick_aside(INIT_SNIPPET_PETER_ASIDES)
-    print_aside(a["emoji"], a["line"])
+def print_init_helper_snippets() -> None:
     _print_python_code_story(
-        "Client-side Auralog — auralogger.client",
-        _build_client_integration_snippet(),
-    )
-    a = pick_aside(INIT_SNIPPET_DEADPOOL_ASIDES)
-    print_aside(a["emoji"], a["line"])
-    a = pick_aside(INIT_SNIPPET_WOLVERINE_ASIDES)
-    print_aside(a["emoji"], a["line"])
-    a = pick_aside(INIT_SNIPPET_THOR_ASIDES)
-    print_aside(a["emoji"], a["line"])
-    _print_python_code_story(
-        "Server-side AuraLog — auralogger (AuraServer)",
+        "auralogger — configure and log",
         _build_server_integration_snippet(),
     )
     _print_python_code_story(
         "Using your generated auralog helper (server example logs)",
         _build_server_usage_snippet(),
-    )
-    print(
-        dim(
-            "   If your frontend runtime is JavaScript/TypeScript, use the Node package "
-            "auralogger-cli/client instead."
-        )
     )
     print()
 
@@ -327,32 +235,14 @@ def print_post_init_summary(
     )
 
     print()
-    print_two_auralog_explainer()
-    print_init_helper_snippets_with_character_voices()
-
-    print(
-        bold_hex("#f85149", "🙅 ")
-        + white("Never put ")
-        + bold_white(ENV_USER_SECRET)
-        + white(" in frontend bundles — only the ")
-        + bold_white("server")
-        + white(" AuraLog file gets that.")
-    )
-    print(
-        gray("   The ")
-        + bold_gray("client")
-        + gray(
-            " Auralog uses project token only; proj_auth uses the token in the URL path."
-        )
-    )
-    print()
+    print_init_helper_snippets()
 
 
 def print_init_welcome_banner() -> None:
     print()
     print(
         bold_white("Auralogger init")
-        + dim(" — client pretty-logs + server secrets, coming right up.")
+        + dim(" — wire project token, user secret, and session, coming right up.")
     )
     a = pick_aside(INIT_WELCOME_ASIDES)
     print_aside(a["emoji"], a["line"])
@@ -365,38 +255,14 @@ def print_already_configured_success() -> None:
         bold_hex("#ffa657", "🎉 ")
         + white("Plot twist — this shell already has token, user secret, and session.")
     )
-    print(
-        gray(
-            "   Drop-in helpers below — client reads the project token from your bundler; "
-            "server uses token + user secret; id/styles can hydrate via proj_auth."
-        )
-    )
     a = pick_aside(INIT_ALREADY_STRANGE_ASIDES)
     print_aside(a["emoji"], a["line"])
     print()
-    print_two_auralog_explainer()
-    print_init_helper_snippets_with_character_voices()
-    print(
-        dim("   Need a fresh session from the API? Unset ")
-        + white(ENV_PROJECT_SESSION)
-        + dim(", then ")
-        + hex_color("#79c0ff", "auralogger init")
-        + dim(" again.")
-    )
+    print_init_helper_snippets()
     a = pick_aside(INIT_ALREADY_LOKI_ASIDES)
     print_aside(a["emoji"], a["line"])
-    print(
-        dim("   Victory lap for the server pipe: ")
-        + hex_color("#79c0ff", "auralogger server-check")
-    )
     a = pick_aside(INIT_ALREADY_STEVE_ASIDES)
     print_aside(a["emoji"], a["line"])
-    print(
-        dim(
-            "   If your frontend runtime is JavaScript/TypeScript, use the Node package "
-            "auralogger-cli/client instead."
-        )
-    )
     print()
 
 

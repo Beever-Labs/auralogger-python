@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from typing import Any, List, Optional, Sequence
 
 # Primary keys (mirrors node/src/utils/env-config.ts)
@@ -12,8 +11,6 @@ ENV_PROJECT_TOKEN = "AURALOGGER_PROJECT_TOKEN"
 ENV_NEXT_PUBLIC_PROJECT_TOKEN = "NEXT_PUBLIC_AURALOGGER_PROJECT_TOKEN"
 ENV_VITE_PROJECT_TOKEN = "VITE_AURALOGGER_PROJECT_TOKEN"
 ENV_USER_SECRET = "AURALOGGER_USER_SECRET"
-# Legacy: treated as user secret when ENV_USER_SECRET is unset
-ENV_PROJECT_SECRET = "AURALOGGER_PROJECT_SECRET"
 
 ENV_PROJECT_ID = "AURALOGGER_PROJECT_ID"
 ENV_NEXT_PUBLIC_PROJECT_ID = "NEXT_PUBLIC_AURALOGGER_PROJECT_ID"
@@ -26,8 +23,6 @@ ENV_VITE_PROJECT_SESSION = "VITE_AURALOGGER_PROJECT_SESSION"
 ENV_PROJECT_STYLES = "AURALOGGER_PROJECT_STYLES"
 ENV_NEXT_PUBLIC_PROJECT_STYLES = "NEXT_PUBLIC_AURALOGGER_PROJECT_STYLES"
 ENV_VITE_PROJECT_STYLES = "VITE_AURALOGGER_PROJECT_STYLES"
-
-_legacy_project_secret_warned = False
 
 
 def _trim_env(key: str) -> Optional[str]:
@@ -53,22 +48,7 @@ def get_resolved_project_token() -> Optional[str]:
 
 
 def get_resolved_user_secret() -> Optional[str]:
-    global _legacy_project_secret_warned
-    u = _trim_env(ENV_USER_SECRET)
-    if u:
-        return u
-    legacy = _trim_env(ENV_PROJECT_SECRET)
-    if legacy:
-        if not _legacy_project_secret_warned:
-            _legacy_project_secret_warned = True
-            print(
-                "auralogger: "
-                f"{ENV_PROJECT_SECRET} is deprecated as a user secret; set "
-                f"{ENV_USER_SECRET} instead. Using legacy value for now.",
-                file=sys.stderr,
-            )
-        return legacy
-    return None
+    return _trim_env(ENV_USER_SECRET)
 
 
 def get_resolved_project_id() -> Optional[str]:

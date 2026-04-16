@@ -8,19 +8,11 @@
 
 | Variable | Description |
 |----------|-------------|
-| `AURALOGGER_PROJECT_TOKEN` | Ciphertext project token. Used in URL paths: `POST /api/{token}/proj_auth`, `POST /api/{token}/logs`, and `WS /{token}/create_log`. No `secret` header on `proj_auth`. |
-| `AURALOGGER_USER_SECRET` | User secret. Sent as HTTP headers **`secret`** and **`user_secret`** on `POST /api/{token}/logs` (both set to this value). Sent on the server ingest WebSocket as **`Authorization: Bearer <user_secret>`**. |
+| `AURALOGGER_PROJECT_TOKEN` | Project-scoped token used by the CLI and server SDK to authenticate and look up your project. Treat as **private** (server-side apps and CI only). |
+| `AURALOGGER_USER_SECRET` | **Server-side / CI secret only.** Required for server-side logging and fetching logs. Never expose this value in public repos or client bundles. |
 | `AURALOGGER_PROJECT_SESSION` | Session string from `proj_auth` (printed by `auralogger init`). Optional for `aura_log` if the API is reachable and `proj_auth` can hydrate. |
 | `AURALOGGER_PROJECT_ID` | Internal project id from `proj_auth`. Optional for `aura_log` when hydration runs. |
 | `AURALOGGER_PROJECT_STYLES` | JSON string of style entries for terminal coloring. Optional for `get-logs` and `aura_log` when styles can be fetched via `proj_auth`. |
-
-**Bundler aliases (same values as above):** `NEXT_PUBLIC_AURALOGGER_PROJECT_TOKEN`, `VITE_AURALOGGER_PROJECT_TOKEN`, and the matching `NEXT_PUBLIC_*` / `VITE_*` keys for id, session, and styles are read with the same precedence as the Node SDK.
-
-## Legacy
-
-If **`AURALOGGER_USER_SECRET`** is unset but **`AURALOGGER_PROJECT_SECRET`** is set, the library treats the legacy value as the **user secret** and prints a one-time deprecation notice on stderr. You still need **`AURALOGGER_PROJECT_TOKEN`** for path-based routes. Migrate to `AURALOGGER_USER_SECRET`.
-
-Older names such as `AURALOGGER_SECRET_KEY` are **not** read.
 
 ## Getting values
 
@@ -33,13 +25,10 @@ Older names such as `AURALOGGER_SECRET_KEY` are **not** read.
 | Context | What is required |
 |---------|------------------|
 | **`auralogger init`** | Loads `.env` / `.env.local` first. Optional: `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` in env to skip prompts. |
-| **`auralogger server-check`** | Prompts for missing token/secret when needed, then calls `proj_auth`, opens `WS …/create_log` with Bearer auth, and sends a test log. |
-| **`auralogger client-check`** | Uses the same prompt flow as `init`, then calls `proj_auth`, opens `WS …/create_browser_logs` (path-only auth), and sends one test log. |
-| **`auralogger test-serverlog`** | Prompts for missing token/secret, runs `AuraServer.sync_from_secret(...)`, sends 5 logs, then closes the cached server socket. |
-| **`auralogger test-clientlog`** | Prompts for missing token, then sends a 5-log burst through `create_browser_logs` using path-only auth. |
+| **`auralogger server-check`** | Prompts for missing token/secret when needed, then sends a single **server-side** test log to verify connectivity. |
+| **`auralogger test-serverlog`** | Prompts for missing token/secret, runs `auralogger.sync_from_secret(...)`, sends 5 logs, then closes the cached socket. |
 | **`auralogger get-logs`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; styles from env or fetched once via `proj_auth` for that run. |
 | **`aura_log()`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; id/session/styles from env or from a cached `proj_auth` fetch. Otherwise console-only with a one-time stderr hint. |
-| **`AuraClient` / `client_log()`** | `AURALOGGER_PROJECT_TOKEN` (or `AuraClient.configure(...)`) and reachable `proj_auth` for full send path; falls back to console-only if project/session hydration fails. |
 
 ## Optional
 

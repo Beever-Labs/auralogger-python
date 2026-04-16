@@ -21,7 +21,7 @@ Path segments use URL encoding consistent with Node `encodeURIComponent` (`aural
 ### `POST /api/{project_token}/proj_auth`
 
 - Used by: `auralogger init`, `auralogger/commands/server_check.py`, style hydration in `get_logs.py` and `aura_log.py`
-- Client: `auralogger/proj_auth.py` → `fetch_proj_auth_payload`
+- Implementation: `auralogger/proj_auth.py` → `fetch_proj_auth_payload`
 - Purpose: fetch project id, session, styles
 - **No auth headers** — project token is only in the path.
 
@@ -44,16 +44,6 @@ Path segments use URL encoding consistent with Node `encodeURIComponent` (`aural
   - `auralogger/commands/server_check.py`
 - Path segment: **project token** (ciphertext), not internal project id
 - Headers: **`Authorization: Bearer <user_secret>`** only (no `secret:` custom header)
-
----
-
-### `WS /{project_token}/create_browser_logs`
-
-- Used by:
-  - `auralogger/commands/client_check.py`
-  - `auralogger/commands/test_clientlog.py`
-- Path segment: **project token** (ciphertext), not internal project id
-- Headers: **none required** (path-only auth)
 
 ---
 

@@ -335,8 +335,8 @@ def aura_log(
     ).start()
 
 
-class AuraServer:
-    """Node-parity server logger wrapper over ``aura_log`` runtime behavior."""
+class auralogger:
+    """Logger wrapper over ``aura_log`` runtime behavior (configure, sync, log, close socket)."""
 
     @staticmethod
     def configure(project_token: str, user_secret: Optional[str] = None) -> None:
@@ -355,9 +355,9 @@ class AuraServer:
     def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
         trimmed = project_token.strip()
         if not trimmed:
-            raise ValueError("AuraServer.sync_from_secret: project token cannot be empty.")
+            raise ValueError("auralogger.sync_from_secret: project token cannot be empty.")
 
-        AuraServer.configure(trimmed, user_secret)
+        auralogger.configure(trimmed, user_secret)
         raw = fetch_proj_auth_payload(trimmed)
         project_id_raw = raw.get("project_id")
         session_raw = raw.get("session")
@@ -365,7 +365,7 @@ class AuraServer:
         session = session_raw.strip() if isinstance(session_raw, str) else ""
         if not project_id or not session:
             raise ValueError(
-                "AuraServer.sync_from_secret: proj_auth response missing project id or session."
+                "auralogger.sync_from_secret: proj_auth response missing project id or session."
             )
         with _hydrate_lock:
             global _hydration_cache_token, _hydration_cache_raw

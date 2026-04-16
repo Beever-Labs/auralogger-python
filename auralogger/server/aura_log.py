@@ -25,6 +25,8 @@ from auralogger.utils.env_config import (
 
 UNKNOWN_TYPE = "unknown"
 CONNECT_TIMEOUT_S = 5
+SDK_RETRY_ATTEMPTS = 3
+SDK_RETRY_DELAY_S = 0.5
 
 _ws: Optional[Any] = None
 _bound_url: Optional[str] = None
@@ -118,9 +120,20 @@ def _fetch_proj_auth_cached(project_token: str) -> Optional[Dict[str, Any]]:
     with _hydrate_lock:
         if _hydration_cache_token == project_token and _hydration_cache_raw is not None:
             return _hydration_cache_raw
-        try:
-            raw = fetch_proj_auth_payload(project_token)
-        except ValueError:
+        raw = None
+        for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
+            try:
+                raw = fetch_proj_auth_payload(project_token)
+                break
+            except ValueError:
+                if attempt >= SDK_RETRY_ATTEMPTS:
+                    return None
+                print(
+                    f"auralogger: proj_auth failed; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                    file=sys.stderr,
+                )
+                threading.Event().wait(SDK_RETRY_DELAY_S)
+        if raw is None:
             return None
         _hydration_cache_token = project_token
         _hydration_cache_raw = raw
@@ -212,6 +225,40 @@ def _styles_for_console(
     return None
 
 
+def _send_payload_async(project_token: str, user_secret: str, payload: Dict[str, Any]) -> None:
+    try:
+        body = json.dumps(payload)
+    except (TypeError, ValueError) as e:
+        print(f"auralogger: failed to serialize log payload: {e}", file=sys.stderr)
+        return
+
+    for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
+        try:
+            ws = _ensure_ws(project_token, user_secret)
+            ws.send(body)
+            return
+        except websocket.WebSocketTimeoutException as e:
+            close_aura_log_socket()
+            if attempt >= SDK_RETRY_ATTEMPTS:
+                print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
+                return
+            print(
+                f"auralogger: websocket send timeout; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                file=sys.stderr,
+            )
+            threading.Event().wait(SDK_RETRY_DELAY_S)
+        except Exception as e:
+            close_aura_log_socket()
+            if attempt >= SDK_RETRY_ATTEMPTS:
+                print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
+                return
+            print(
+                f"auralogger: websocket send failed ({e}); retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                file=sys.stderr,
+            )
+            threading.Event().wait(SDK_RETRY_DELAY_S)
+
+
 def aura_log(
     type: str,
     message: str,
@@ -279,24 +326,13 @@ def aura_log(
     assert project_token is not None
     assert user_secret is not None
 
-    remote_session = merged["session"]
-    payload["session"] = remote_session
-
-    try:
-        body = json.dumps(payload)
-    except (TypeError, ValueError) as e:
-        print(f"auralogger: failed to serialize log payload: {e}", file=sys.stderr)
-        return
-
-    try:
-        ws = _ensure_ws(project_token, user_secret)
-        ws.send(body)
-    except websocket.WebSocketTimeoutException as e:
-        print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
-        close_aura_log_socket()
-    except Exception as e:
-        print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
-        close_aura_log_socket()
+    send_payload = payload.copy()
+    send_payload["session"] = merged["session"]
+    threading.Thread(
+        target=_send_payload_async,
+        args=(project_token, user_secret, send_payload),
+        daemon=True,
+    ).start()
 
 
 class AuraServer:

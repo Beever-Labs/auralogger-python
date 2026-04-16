@@ -22,6 +22,8 @@ from auralogger.utils.env_config import get_resolved_project_token, try_parse_re
 UNKNOWN_TYPE = "unknown"
 CONNECT_TIMEOUT_S = 5
 DEFAULT_SOCKET_IDLE_CLOSE_MS = 60_000
+SDK_RETRY_ATTEMPTS = 3
+SDK_RETRY_DELAY_S = 0.5
 
 _ws: Optional[Any] = None
 _bound_url: Optional[str] = None
@@ -89,9 +91,20 @@ def _fetch_proj_auth_cached(project_token: str) -> Optional[Dict[str, Any]]:
     with _hydrate_lock:
         if _hydration_cache_token == project_token and _hydration_cache_raw is not None:
             return _hydration_cache_raw
-        try:
-            raw = fetch_proj_auth_payload(project_token)
-        except ValueError:
+        raw = None
+        for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
+            try:
+                raw = fetch_proj_auth_payload(project_token)
+                break
+            except ValueError:
+                if attempt >= SDK_RETRY_ATTEMPTS:
+                    return None
+                print(
+                    f"auralogger: proj_auth failed; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                    file=sys.stderr,
+                )
+                threading.Event().wait(SDK_RETRY_DELAY_S)
+        if raw is None:
             return None
         _hydration_cache_token = project_token
         _hydration_cache_raw = raw
@@ -212,6 +225,41 @@ def _styles_for_console(
     return None
 
 
+def _send_payload_async(project_token: str, payload: Dict[str, Any]) -> None:
+    try:
+        body = json.dumps(payload)
+    except (TypeError, ValueError) as e:
+        print(f"auralogger: failed to serialize log payload: {e}", file=sys.stderr)
+        return
+
+    for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
+        try:
+            ws = _ensure_ws(project_token)
+            ws.send(body)
+            _schedule_socket_idle_close()
+            return
+        except websocket.WebSocketTimeoutException as e:
+            close_client_log_socket()
+            if attempt >= SDK_RETRY_ATTEMPTS:
+                print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
+                return
+            print(
+                f"auralogger: websocket send timeout; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                file=sys.stderr,
+            )
+            threading.Event().wait(SDK_RETRY_DELAY_S)
+        except Exception as e:
+            close_client_log_socket()
+            if attempt >= SDK_RETRY_ATTEMPTS:
+                print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
+                return
+            print(
+                f"auralogger: websocket send failed ({e}); retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
+                file=sys.stderr,
+            )
+            threading.Event().wait(SDK_RETRY_DELAY_S)
+
+
 def client_log(
     type: str,
     message: str,
@@ -221,19 +269,16 @@ def client_log(
     global _warned_missing_project_token, _warned_missing_project_id
 
     project_token = _resolve_project_token_runtime()
-    if not project_token:
-        if not _warned_missing_project_token:
-            _warned_missing_project_token = True
-            print(
-                "auralogger: missing project token. Call AuraClient.configure(project_token) "
-                "or set AURALOGGER_PROJECT_TOKEN.",
-                file=sys.stderr,
-            )
-        return
-
-    merged = _merged_runtime_for_send(project_token)
-    can_send = merged is not None
-    if not can_send and not _warned_missing_project_id:
+    merged = _merged_runtime_for_send(project_token) if project_token else None
+    can_send = bool(project_token and merged is not None)
+    if not project_token and not _warned_missing_project_token:
+        _warned_missing_project_token = True
+        print(
+            "auralogger: missing project token. Call AuraClient.configure(project_token) "
+            "or set AURALOGGER_PROJECT_TOKEN.",
+            file=sys.stderr,
+        )
+    if project_token and not can_send and not _warned_missing_project_id:
         _warned_missing_project_id = True
         print(
             "auralogger: client logger is running in console-only mode. "
@@ -267,22 +312,12 @@ def client_log(
     if not can_send:
         return
 
-    try:
-        body = json.dumps(payload)
-    except (TypeError, ValueError) as e:
-        print(f"auralogger: failed to serialize log payload: {e}", file=sys.stderr)
-        return
-
-    try:
-        ws = _ensure_ws(project_token)
-        ws.send(body)
-        _schedule_socket_idle_close()
-    except websocket.WebSocketTimeoutException as e:
-        print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
-        close_client_log_socket()
-    except Exception as e:
-        print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
-        close_client_log_socket()
+    assert project_token is not None
+    threading.Thread(
+        target=_send_payload_async,
+        args=(project_token, payload.copy()),
+        daemon=True,
+    ).start()
 
 
 def auralog(loginputs: ClientLogInputs) -> None:

@@ -24,6 +24,16 @@ class _FakeSocket:
         self.closed = True
 
 
+class _ImmediateThread:
+    def __init__(self, target, args=(), daemon=None) -> None:
+        self._target = target
+        self._args = args
+        self.daemon = daemon
+
+    def start(self) -> None:
+        self._target(*self._args)
+
+
 class AuraClientSdkTests(unittest.TestCase):
     def test_configure_rejects_empty_token(self) -> None:
         with self.assertRaises(ValueError):
@@ -66,11 +76,26 @@ class AuraClientSdkTests(unittest.TestCase):
             "auralogger.client.client_log._ensure_ws",
             return_value=ws,
         ), patch("auralogger.client.client_log.print_log"), patch(
+            "auralogger.client.client_log.threading.Thread",
+            _ImmediateThread,
+        ), patch(
             "auralogger.client.client_log._schedule_socket_idle_close"
         ):
             client_log("info", "hello", "tests/client", {"x": 1})
 
         self.assertEqual(len(ws.sent), 1)
+
+    def test_client_log_prints_even_without_project_token(self) -> None:
+        with patch(
+            "auralogger.client.client_log._resolve_project_token_runtime",
+            return_value=None,
+        ), patch("auralogger.client.client_log.print_log") as mocked_print, patch(
+            "auralogger.client.client_log.threading.Thread"
+        ) as mocked_thread:
+            client_log("info", "still prints", "tests/client", {"x": 1})
+
+        mocked_print.assert_called_once()
+        mocked_thread.assert_not_called()
 
     def test_close_socket_delegates(self) -> None:
         with patch("auralogger.client.client_log.close_client_log_socket") as mocked:

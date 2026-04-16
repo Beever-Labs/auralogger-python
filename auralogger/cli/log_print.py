@@ -46,16 +46,20 @@ def print_log(log: Mapping[str, Any], config_styles: Any) -> None:
     line1 = " ".join(
         (
             _dim(_rgb(str(created), spec.get("time-color"))),
-            str(icon),
             _dim(_rgb(str(type_disp), spec.get("type-color"))),
             _rgb(str(loc), spec.get("location-color")),
         )
     )
-    _print_stdout_line(line1)
-
     msg = log.get("message")
-    _print_stdout_line(_rgb(str(msg if msg is not None else ""), spec.get("message-color")))
+    message_line = " ".join(
+        (
+            str(icon),
+            _rgb(str(msg if msg is not None else ""), spec.get("message-color")),
+        )
+    ).strip()
 
     data = log.get("data")
+    parts = [line1, message_line]
     if data is not None and str(data).strip():
-        _print_stdout_line(_dim(_rgb(str(data), spec.get("text-color"))))
+        parts.append(_dim(_rgb(str(data), spec.get("text-color"))))
+    _print_stdout_line("\n".join(parts))

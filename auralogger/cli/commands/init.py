@@ -172,14 +172,7 @@ def _build_server_integration_snippet() -> str:
         [
             "import os",
             "from typing import Any, Dict, Literal, Optional",
-            "from pydantic import BaseModel, Field",
             "from auralogger import AuraServer",
-            "",
-            "class LogInputs(BaseModel):",
-            "    type: Literal['debug', 'info', 'warn', 'error'] = 'info'",
-            "    message: str = Field(..., min_length=1)",
-            "    location: Optional[str] = None",
-            "    data: Optional[Dict[str, Any]] = None",
             "",
             "def configure_auralogger() -> None:",
             "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
@@ -188,12 +181,17 @@ def _build_server_integration_snippet() -> str:
             "        raise RuntimeError('Missing Auralogger server env variables')",
             "    AuraServer.sync_from_secret(project_token, user_secret)",
             "",
-            "def auralog(loginputs: LogInputs) -> None:",
+            "def auralog(",
+            "    type: Literal['debug', 'info', 'warn', 'error'],",
+            "    message: str,",
+            "    location: Optional[str] = None,",
+            "    data: Optional[Dict[str, Any]] = None,",
+            ") -> None:",
             "    AuraServer.log(",
-            "        loginputs.type,",
-            "        loginputs.message,",
-            "        loginputs.location,",
-            "        loginputs.data,",
+            "        type,",
+            "        message,",
+            "        location,",
+            "        data,",
             "    )",
         ]
     )
@@ -222,6 +220,28 @@ def _build_client_integration_snippet() -> str:
             "        loginputs.location,",
             "        loginputs.data,",
             "    )",
+        ]
+    )
+
+
+def _build_server_usage_snippet() -> str:
+    return "\n".join(
+        [
+            "from your_server_auralog_file import auralog",
+            "",
+            "auralog(",
+            "    'info',",
+            "    'Request completed',",
+            "    'api/orders#create',",
+            "    {'order_id': 'ord_123', 'status': 201},",
+            ")",
+            "# expected: [info] Request completed @ api/orders#create {'order_id': 'ord_123', 'status': 201}",
+            "",
+            "auralog('warn', 'Cache miss')",
+            "# expected: [warn] Cache miss",
+            "",
+            "auralog('error', 'Payment gateway timeout', data={'provider': 'stripe'})",
+            "# expected: [error] Payment gateway timeout {'provider': 'stripe'}",
         ]
     )
 
@@ -273,6 +293,10 @@ def print_init_helper_snippets_with_character_voices() -> None:
     _print_python_code_story(
         "Server-side AuraLog — auralogger (AuraServer)",
         _build_server_integration_snippet(),
+    )
+    _print_python_code_story(
+        "Using your generated auralog helper (server example logs)",
+        _build_server_usage_snippet(),
     )
     print(
         dim(

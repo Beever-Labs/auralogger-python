@@ -2,6 +2,18 @@
 
 Command-line client for [Auralogger](https://auralogger.com): `init`, `server-check`, `client-check`, `test-serverlog`, `test-clientlog`, and `get-logs`, plus the `aura_log` helper for Python apps.
 
+```text
+├── LICENSE
+├── pyproject.toml
+├── README.md
+```
+
+## Package naming (Node vs Python)
+
+- Python distribution name: `auralogger` (install with `pip install auralogger`)
+- Node distribution name: `auralogger-cli` (install with `npm install auralogger-cli`)
+- Both expose the CLI command `auralogger`, but package names on package indexes are intentionally different.
+
 ## Install
 
 From [PyPI](https://pypi.org/) (once published):
@@ -21,8 +33,6 @@ pip install -e ./python
 The CLI uses **your shell’s current working directory** as the project root. It loads **`.env`** and **`.env.local`** from that directory before each command (same idea as the Node `auralogger` CLI).
 
 Configuration is **environment variables** only — see **`user-docs/environment.md`** for **`AURALOGGER_PROJECT_TOKEN`**, **`AURALOGGER_USER_SECRET`**, and the publishable `AURALOGGER_PROJECT_*` keys. There is no `auralogger.config.json`.
-
-**Wire contract (matches Node):** `proj_auth` is **`POST /api/{project_token}/proj_auth`** with the token in the path only. **`get-logs`** uses **`POST /api/{project_token}/logs`** with headers **`secret`** and **`user_secret`** both set to your **user secret**. The server ingest socket is **`WS /{project_token}/create_log`** with **`Authorization: Bearer <user_secret>`**. Set **`AURALOGGER_PROJECT_TOKEN`** and **`AURALOGGER_USER_SECRET`**; legacy **`AURALOGGER_PROJECT_SECRET`** is treated as the user secret (with a deprecation warning) if **`AURALOGGER_USER_SECRET`** is unset.
 
 ```bash
 cd /path/to/my-app
@@ -63,6 +73,28 @@ auralog(
 )
 ```
 
+## Using the generated `auralog(...)` helper
+
+After `auralogger init`, paste the server snippet into your app (for example `your_server_auralog_file.py`), then use it like this:
+
+```python
+from your_server_auralog_file import auralog
+
+auralog(
+    "info",
+    "Request completed",
+    "api/orders#create",
+    {"order_id": "ord_123", "status": 201},
+)
+# expected: [info] Request completed @ api/orders#create {"order_id": "ord_123", "status": 201}
+
+auralog("warn", "Cache miss")
+# expected: [warn] Cache miss
+
+auralog("error", "Payment gateway timeout", data={"provider": "stripe"})
+# expected: [error] Payment gateway timeout {"provider": "stripe"}
+```
+
 ## Commands
 
 ```text
@@ -93,21 +125,3 @@ Install editable package + development tooling (currently Ruff):
 cd python
 pip install -e ".[dev]"
 ```
-
-## Publishing (maintainers)
-
-Releases are automated through `.github/workflows/python-publish.yml`.
-
-- The workflow runs on GitHub release publish events only when the tag matches `python-v*` (for example, `python-v0.1.1`), or through manual `workflow_dispatch`.
-- Configure repository secret `PYPI_API_TOKEN` with a PyPI API token.
-- Before tagging, bump `version` in `python/pyproject.toml` and update `python/CHANGELOG.md`.
-
-Manual fallback from this directory, after configuring PyPI credentials (`twine`):
-
-```bash
-python -m pip install build twine
-python -m build
-twine upload dist/*
-```
-
-End users only need `pip install auralogger` once the release is on PyPI.

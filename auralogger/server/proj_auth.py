@@ -8,6 +8,7 @@ import urllib.request
 from typing import Any, Dict, cast
 
 from auralogger.utils.backend_origin import build_proj_auth_url, resolve_api_base_url
+from auralogger.utils.recovery_messages import ENV_RECOVERY_HINT_PLAIN
 from auralogger.utils.http_utils import parse_error_body
 
 
@@ -30,7 +31,10 @@ def fetch_proj_auth_payload(project_token: str) -> Dict[str, Any]:
         headers = e.headers
     except urllib.error.URLError as e:
         reason = getattr(e, "reason", e)
-        raise ValueError(f"Unable to reach {base}: {reason}") from e
+        raise ValueError(
+            f"Can't reach Auralogger right now — check your network or VPN, then try again. ({reason}) "
+            f"{ENV_RECOVERY_HINT_PLAIN}"
+        ) from e
 
     if status < 200 or status >= 300:
         ctype = headers.get("content-type", "")

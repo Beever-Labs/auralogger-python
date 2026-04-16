@@ -1,4 +1,4 @@
-"""`auralogger server-check` (mirrors node/src/cli/services/server-check.ts)."""
+"""`auralogger server-check` — parity with node/src/cli/services/server-check.ts."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 import websocket
 from websocket import create_connection
 
+from auralogger.cli.aside_pools import ENV_RECOVERY_HINT_PLAIN, SERVER_CHECK_FAIL_WOLVERINE_ASIDES, SERVER_CHECK_OPEN_ASIDES, SERVER_CHECK_SUCCESS_THOR_ASIDES, pick_aside
 from auralogger.cli.cli_auth import resolve_project_context_for_cli_checks
+from auralogger.cli.cli_load_env import ensure_utf8_stdio
+from auralogger.cli.cli_style import bold_white, dim, green, hex_color, white
+from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside
 from auralogger.utils.backend_origin import resolve_ws_base_url
 
 CONNECT_TIMEOUT_S = 5
@@ -34,6 +38,7 @@ def _iso_timestamp_with_micros(epoch_ms: float) -> str:
 
 
 def run_server_check() -> None:
+    ensure_utf8_stdio()
     context = resolve_project_context_for_cli_checks()
     project_token = context.project_token
     user_secret = context.user_secret
@@ -41,10 +46,16 @@ def run_server_check() -> None:
     project_name = context.project_name
     session = context.session
 
-    ws_base = resolve_ws_base_url()
-    ws_url = _build_ws_url(project_token)
-    print(f"Checking WebSocket connectivity to {ws_base} …")
+    print(
+        dim("📡 ")
+        + white("Pinging the ")
+        + bold_white("server")
+        + white(" logger — one tiny test log coming up…"),
+    )
+    a = pick_aside(SERVER_CHECK_OPEN_ASIDES)
+    print_aside(a["emoji"], a["line"])
 
+    ws_url = _build_ws_url(project_token)
     auth_header = f"Authorization: Bearer {user_secret}"
 
     try:
@@ -53,12 +64,21 @@ def run_server_check() -> None:
             timeout=CONNECT_TIMEOUT_S,
             header=[auth_header],
         )
-    except websocket.WebSocketTimeoutException as e:
+    except websocket.WebSocketTimeoutException:
+        w = pick_aside(SERVER_CHECK_FAIL_WOLVERINE_ASIDES)
+        print_aside(w["emoji"], w["line"])
         raise ValueError(
-            f"WebSocket connect timed out after {CONNECT_TIMEOUT_S * 1000}ms."
-        ) from e
+            "Server logger socket didn't open in time — still quiet. Check VPN/Wi‑Fi, firewall, "
+            "AURALOGGER_WS_URL if you override it, and that token + user secret match this project. "
+            + ENV_RECOVERY_HINT_PLAIN
+        ) from None
     except Exception as e:
-        raise ValueError(f"auralogger: server connect failed: {e}") from e
+        w = pick_aside(SERVER_CHECK_FAIL_WOLVERINE_ASIDES)
+        print_aside(w["emoji"], w["line"])
+        raise ValueError(
+            f"Server pipe wouldn't open ({e}). Verify creds in .env, run from the folder that loads "
+            f"them, then try again. {ENV_RECOVERY_HINT_PLAIN}"
+        ) from e
 
     now_ms = time.time() * 1000.0
     payload = {
@@ -76,7 +96,7 @@ def run_server_check() -> None:
             ws.close()
         except Exception:
             pass
-        raise ValueError(f"Could not pack the test log: {e}") from e
+        raise ValueError(f"Couldn't pack the test log: {e}") from e
 
     try:
         ws.send(body)
@@ -85,7 +105,7 @@ def run_server_check() -> None:
             ws.close()
         except Exception:
             pass
-        raise ValueError(f"Log did not send — {e}") from e
+        raise ValueError(f"Log didn't send — {e}") from e
 
     try:
         ws.close()
@@ -93,6 +113,13 @@ def run_server_check() -> None:
         pass
 
     label = project_name or project_id
+    print()
     print(
-        f"Auralogger is reachable. Server logger accepted a test log for project {label!s}."
+        green("🎉 ")
+        + white("Server logger is alive — a test log just took off for project ")
+        + hex_color("#ffa657", label)
+        + white("."),
     )
+    a = pick_aside(SERVER_CHECK_SUCCESS_THOR_ASIDES)
+    print_aside(a["emoji"], a["line"])
+    maybe_print_generic_spice()

@@ -1,4 +1,4 @@
-"""`auralogger client-check` - browser-ingest WebSocket probe."""
+"""`auralogger client-check` — parity with node/src/cli/services/client-check.ts."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 import websocket
 from websocket import create_connection
 
+from auralogger.cli.aside_pools import ENV_RECOVERY_HINT_PLAIN, CLIENT_CHECK_START_PETER_ASIDES, CLIENT_CHECK_SUCCESS_ASIDES, pick_aside
 from auralogger.cli.cli_auth import resolve_project_context_for_cli_checks
+from auralogger.cli.cli_load_env import ensure_utf8_stdio
+from auralogger.cli.cli_style import bold_white, dim, green, hex_color, white
+from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside
 from auralogger.utils.backend_origin import (
     build_create_browser_logs_url,
     resolve_ws_base_url,
@@ -26,25 +30,38 @@ def _iso_timestamp_with_micros(epoch_ms: float) -> str:
 
 
 def run_client_check() -> None:
+    ensure_utf8_stdio()
     context = resolve_project_context_for_cli_checks()
     project_token = context.project_token
     project_id = context.project_id
     project_name = context.project_name
     session = context.session
 
+    print(
+        dim("🌐 ")
+        + white("Trying the ")
+        + bold_white("browser-style")
+        + white(" log tunnel (path-only socket auth)…"),
+    )
+    a = pick_aside(CLIENT_CHECK_START_PETER_ASIDES)
+    print_aside(a["emoji"], a["line"])
+
     ws_base = resolve_ws_base_url()
     ws_url = build_create_browser_logs_url(ws_base, project_token)
-    print(f"Checking browser ingest connectivity to {ws_base} ...")
 
     try:
-        # Browser ingest route is path-auth only; do not send auth headers.
         ws = create_connection(ws_url, timeout=CONNECT_TIMEOUT_S)
     except websocket.WebSocketTimeoutException as e:
         raise ValueError(
-            f"Browser ingest connect timed out after {CONNECT_TIMEOUT_S * 1000}ms."
+            "Browser-style socket never connected — check network/VPN, corporate proxy, and "
+            "AURALOGGER_WS_URL if custom; token must match the project. "
+            + ENV_RECOVERY_HINT_PLAIN
         ) from e
     except Exception as e:
-        raise ValueError(f"auralogger: client-check connect failed: {e}") from e
+        raise ValueError(
+            f"Browser tunnel error ({e}). Same fixes as timeout: network, proxy, env in the right "
+            f"cwd, then rerun. {ENV_RECOVERY_HINT_PLAIN}"
+        ) from e
 
     now_ms = time.time() * 1000.0
     payload = {
@@ -62,7 +79,7 @@ def run_client_check() -> None:
             ws.close()
         except Exception:
             pass
-        raise ValueError(f"Could not pack the test log: {e}") from e
+        raise ValueError(f"Couldn't pack the test log: {e}") from e
 
     try:
         ws.send(body)
@@ -71,7 +88,7 @@ def run_client_check() -> None:
             ws.close()
         except Exception:
             pass
-        raise ValueError(f"Log did not send - {e}") from e
+        raise ValueError(f"Log didn't send — {e}") from e
 
     try:
         ws.close()
@@ -79,6 +96,13 @@ def run_client_check() -> None:
         pass
 
     label = project_name or project_id
+    print()
     print(
-        f"Browser ingest is reachable. Client check log accepted for project {label!s}."
+        green("🎉 ")
+        + white("Browser-style path works — test log zoomed for project ")
+        + hex_color("#ffa657", label)
+        + white("."),
     )
+    a = pick_aside(CLIENT_CHECK_SUCCESS_ASIDES)
+    print_aside(a["emoji"], a["line"])
+    maybe_print_generic_spice()

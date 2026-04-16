@@ -130,8 +130,8 @@ class InitParityTests(unittest.TestCase):
 
         fetch_proj_auth.assert_not_called()
         rendered = output.getvalue()
-        self.assertIn("already configured", rendered)
-        self.assertIn("Server integration snippet (Python)", rendered)
+        self.assertIn("already has token", rendered)
+        self.assertIn("AuraServer", rendered)
 
     def test_run_init_normal_path_prints_integration_help(self) -> None:
         output = io.StringIO()
@@ -140,7 +140,7 @@ class InitParityTests(unittest.TestCase):
         ), patch(
             "auralogger.cli.commands.init.get_resolved_project_token", return_value=None
         ), patch(
-            "auralogger.cli.commands.init._user_secret_explicitly_in_env", return_value=False
+            "auralogger.cli.commands.init.get_resolved_user_secret", return_value=None
         ), patch(
             "auralogger.cli.commands.init.get_resolved_session", return_value=None
         ), patch(
@@ -155,7 +155,7 @@ class InitParityTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Copy-paste env block", rendered)
-        self.assertIn("Server integration snippet (Python)", rendered)
+        self.assertIn("Server-side AuraLog", rendered)
         self.assertIn("auralogger-cli/client", rendered)
 
 

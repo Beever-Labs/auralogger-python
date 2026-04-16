@@ -1,7 +1,7 @@
 """Filter normalization for POST /api/{project_token}/logs (mirrors node get-logs-filters)."""
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from auralogger.utils.parser import ParsedFilter
 
@@ -14,7 +14,7 @@ ApiLogFilter = Dict[str, Any]
 def _default_op_for_field(field: str) -> str:
     if field.startswith("data."):
         return "eq"
-    if field in ("order", "maxcount", "skip"):
+    if field in ("order", "maxcount", "skip", "session"):
         return "eq"
     if field == "message":
         return "contains"
@@ -38,7 +38,7 @@ def _allowed_ops_for_field(field: str) -> List[str]:
         return ["in", "not-in"]
     if field == "time":
         return ["since", "from-to"]
-    if field in ("order", "maxcount", "skip"):
+    if field in ("order", "maxcount", "skip", "session"):
         return ["eq"]
     return []
 
@@ -74,3 +74,15 @@ def normalize_and_validate_filters(parsed: List[ParsedFilter]) -> List[Dict[str,
         result.append(api)
 
     return result
+
+
+def with_default_session_filter(
+    filters: List[Dict[str, Any]],
+    session_from_env: Optional[str],
+) -> List[Dict[str, Any]]:
+    """Prepend session eq filter from env unless the user already passed -session."""
+    if not session_from_env:
+        return filters
+    if any(f.get("field") == "session" for f in filters):
+        return filters
+    return [{"field": "session", "value": [session_from_env]}, *filters]

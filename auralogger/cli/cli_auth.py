@@ -5,6 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, cast
 
+from auralogger.cli.aside_pools import (
+    ENV_RECOVERY_HINT_PLAIN,
+    PROMPT_MISSING_CREDENTIAL_TEMPLATES,
+    format_aside_template,
+    pick_aside,
+)
+from auralogger.cli.cli_style import cyan
+from auralogger.cli.cli_tone import print_aside
 from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.env_config import ENV_PROJECT_TOKEN
 from auralogger.utils.env_config import (
@@ -23,19 +31,27 @@ class CliProjectContext:
     session: str
 
 
+def _print_missing_credential_hint(env_key: str) -> None:
+    print()
+    t = pick_aside(PROMPT_MISSING_CREDENTIAL_TEMPLATES)
+    print_aside(t["emoji"], format_aside_template(t["line"], {"envKey": env_key}))
+
+
 def prompt_for_project_token() -> str:
-    entered = input(f"Paste {ENV_PROJECT_TOKEN} (your project token): ")
+    _print_missing_credential_hint(ENV_PROJECT_TOKEN)
+    entered = input(cyan("🔐 ") + f"Paste {ENV_PROJECT_TOKEN} (your project token): ")
     token = entered.strip()
     if not token:
-        raise ValueError("Project token cannot be empty.")
+        raise ValueError(f"Project token cannot be empty. {ENV_RECOVERY_HINT_PLAIN}")
     return token
 
 
 def prompt_for_user_secret() -> str:
-    entered = input(f"Paste {ENV_USER_SECRET} (your user secret): ")
+    _print_missing_credential_hint(ENV_USER_SECRET)
+    entered = input(cyan("🙍 ") + f"Paste {ENV_USER_SECRET} (your user secret): ")
     secret = entered.strip()
     if not secret:
-        raise ValueError("User secret cannot be empty.")
+        raise ValueError(f"User secret cannot be empty. {ENV_RECOVERY_HINT_PLAIN}")
     return secret
 
 
@@ -67,7 +83,8 @@ def resolve_project_context_for_cli_checks() -> CliProjectContext:
     session = session_raw.strip() if isinstance(session_raw, str) else ""
     if not project_id or not session:
         raise ValueError(
-            f"{ENV_PROJECT_TOKEN} looks invalid, or proj_auth did not return project_id/session."
+            f"{ENV_PROJECT_TOKEN} looks invalid, or proj_auth did not return project_id/session. "
+            f"{ENV_RECOVERY_HINT_PLAIN}"
         )
 
     return CliProjectContext(

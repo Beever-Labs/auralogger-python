@@ -18,10 +18,10 @@ class CliUnknownCommandTests(unittest.TestCase):
 
         self.assertEqual(exit_ctx.exception.code, 1)
         output = stderr.getvalue()
-        self.assertIn("Unknown command: wat", output)
-        self.assertIn("Valid commands:", output)
-        self.assertIn("Usage:", output)
-        self.assertIn("auralogger get-logs [filters...]", output)
+        self.assertIn("never heard of", output)
+        self.assertIn("wat", output)
+        self.assertIn("Auralogger CLI", output)
+        self.assertIn("get-logs", output)
 
 
 if __name__ == "__main__":

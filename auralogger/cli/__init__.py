@@ -16,4 +16,9 @@ def __getattr__(name: str) -> Any:
         from auralogger.cli.cli import print_usage
 
         return print_usage
+    # Console scripts may target ``auralogger.cli:_entrypoint`` (older installs / metadata).
+    if name == "_entrypoint":
+        from auralogger.cli.cli import _entrypoint
+
+        return _entrypoint
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

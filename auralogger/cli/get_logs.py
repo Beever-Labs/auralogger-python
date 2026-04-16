@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import json
-import random
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Mapping, Tuple, cast
 
 from auralogger.cli.aside_pools import (
     ENV_RECOVERY_HINT_PLAIN,
-    GET_LOGS_DEADPOOL_SCROLL_ASIDES,
     GET_LOGS_EMPTY_ASIDES,
     GET_LOGS_OPEN_ASIDES,
     GET_LOGS_SKIPPED_SETUP_INTENT_ASIDES,
-    GET_LOGS_STYLES_ASIDES,
     GET_LOGS_SUCCESS_TEMPLATES,
     format_aside_template,
     pick_aside,
@@ -126,15 +123,6 @@ def _resolve_config_styles(project_token: str) -> List[Any]:
         raw = fetch_proj_auth_payload(project_token)
         styles_raw = raw.get("styles")
         rows = styles_raw if isinstance(styles_raw, list) else []
-        print(
-            hex_color("#79c0ff", "🎨 ")
-            + white("No styles in your shell — using freshly fetched styling for this run.")
-        )
-        a = pick_aside(GET_LOGS_STYLES_ASIDES)
-        print_aside(a["emoji"], a["line"])
-        if random.random() < 0.35:
-            d = pick_aside(GET_LOGS_DEADPOOL_SCROLL_ASIDES)
-            print_aside(d["emoji"], d["line"])
         return build_style_entries_from_api(rows)
     except ValueError as e:
         print(

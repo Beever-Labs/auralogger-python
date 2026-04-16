@@ -609,6 +609,21 @@ SERVER_CHECK_FAIL_WOLVERINE_ASIDES: List[AsideEntry] = [
     },
 ]
 
+CHECK_RETRY_ASIDES: List[AsideEntry] = [
+    {
+        "emoji": "🦾",
+        "line": "Tony: Transient failures happen. Retry before we start dramatic monologues.",
+    },
+    {
+        "emoji": "💀",
+        "line": "Deadpool: Retry arc unlocked. Same plan, less panic.",
+    },
+    {
+        "emoji": "🐺",
+        "line": "Wolverine: Breathe. Retry. Then decide what's broken.",
+    },
+]
+
 CLIENT_CHECK_START_PETER_ASIDES: List[AsideEntry] = [
     {
         "emoji": "🕷️",

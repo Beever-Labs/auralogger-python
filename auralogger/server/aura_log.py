@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import threading
 import uuid
@@ -44,6 +45,14 @@ _onlylocal: Optional[bool] = None
 _send_buffer_lock = threading.Lock()
 _send_buffer: list[Dict[str, Any]] = []
 _flush_timer: Optional[threading.Timer] = None
+
+
+def _suppress_websocket_client_noise() -> None:
+    """Hide websocket-client connection/debug logs unless app explicitly overrides."""
+    logging.getLogger("websocket").setLevel(logging.WARNING)
+
+
+_suppress_websocket_client_noise()
 
 
 def _encode_path_token(project_token: str) -> str:

@@ -27,6 +27,8 @@ UNKNOWN_TYPE = "unknown"
 CONNECT_TIMEOUT_S = 5
 SDK_RETRY_ATTEMPTS = 3
 SDK_RETRY_DELAY_S = 0.5
+BATCH_FLUSH_INTERVAL_S = 0.1
+BATCH_MAX_SIZE = 30
 
 _ws: Optional[Any] = None
 _bound_url: Optional[str] = None
@@ -39,6 +41,9 @@ _hydration_cache_raw: Optional[Dict[str, Any]] = None
 _override_project_token: Optional[str] = None
 _override_user_secret: Optional[str] = None
 _onlylocal: Optional[bool] = None
+_send_buffer_lock = threading.Lock()
+_send_buffer: list[Dict[str, Any]] = []
+_flush_timer: Optional[threading.Timer] = None
 
 
 def _encode_path_token(project_token: str) -> str:
@@ -108,9 +113,63 @@ def _close_ws_connection() -> None:
     _bound_url = None
 
 
+def _cancel_flush_timer_locked() -> None:
+    global _flush_timer
+    if _flush_timer is not None:
+        _flush_timer.cancel()
+        _flush_timer = None
+
+
+def _flush_buffer_now(project_token: str, user_secret: str) -> None:
+    global _send_buffer
+    with _send_buffer_lock:
+        if not _send_buffer:
+            _cancel_flush_timer_locked()
+            return
+        batch = _send_buffer[:]
+        _send_buffer = []
+        _cancel_flush_timer_locked()
+    _send_payload_async(project_token, user_secret, batch)
+
+
+def _schedule_or_flush_buffer(project_token: str, user_secret: str) -> None:
+    with _send_buffer_lock:
+        if len(_send_buffer) >= BATCH_MAX_SIZE:
+            should_flush = True
+        else:
+            should_flush = False
+            _cancel_flush_timer_locked()
+            timer = threading.Timer(
+                BATCH_FLUSH_INTERVAL_S,
+                _flush_buffer_now,
+                args=(project_token, user_secret),
+            )
+            timer.daemon = True
+            timer.start()
+            global _flush_timer
+            _flush_timer = timer
+    if should_flush:
+        _flush_buffer_now(project_token, user_secret)
+
+
+def _enqueue_payload_for_send(project_token: str, user_secret: str, payload: Dict[str, Any]) -> None:
+    with _send_buffer_lock:
+        _send_buffer.append(payload)
+    _schedule_or_flush_buffer(project_token, user_secret)
+
+
 def close_aura_log_socket() -> None:
     """Close the cached WebSocket and drop cached ``proj_auth`` data for this process."""
     global _hydration_cache_token, _hydration_cache_raw
+    project_token = _resolve_project_token_runtime()
+    user_secret = _resolve_user_secret_runtime()
+    if project_token and user_secret:
+        _flush_buffer_now(project_token, user_secret)
+    else:
+        with _send_buffer_lock:
+            global _send_buffer
+            _send_buffer = []
+            _cancel_flush_timer_locked()
     _close_ws_connection()
     _hydration_cache_token = None
     _hydration_cache_raw = None
@@ -226,11 +285,13 @@ def _styles_for_console(
     return None
 
 
-def _send_payload_async(project_token: str, user_secret: str, payload: Dict[str, Any]) -> None:
+def _send_payload_async(
+    project_token: str, user_secret: str, payload_batch: list[Dict[str, Any]]
+) -> None:
     try:
-        body = json.dumps(payload)
+        body = json.dumps(payload_batch)
     except (TypeError, ValueError) as e:
-        print(f"auralogger: failed to serialize log payload: {e}", file=sys.stderr)
+        print(f"auralogger: failed to serialize log batch payload: {e}", file=sys.stderr)
         return
 
     for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
@@ -332,11 +393,7 @@ def aura_log(
 
     send_payload = payload.copy()
     send_payload["session"] = merged["session"]
-    threading.Thread(
-        target=_send_payload_async,
-        args=(project_token, user_secret, send_payload),
-        daemon=True,
-    ).start()
+    _enqueue_payload_for_send(project_token, user_secret, send_payload)
 
 
 class auralogger:

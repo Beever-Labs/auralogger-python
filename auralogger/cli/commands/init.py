@@ -71,8 +71,8 @@ def _print_onlylocal_production_dialog() -> None:
     inner_w = 56
     title = "[LOG] onlylocal · prod traffic >> dev"
     lines = [
-        "Production >> dev: more users/events → more log lines → more traffic.",
-        "onlylocal=True — 3rd kw on configure(...) or set auralogger.onlylocal.",
+        "Prod >> dev: log lines multiply fast — bytes on the wire follow.",
+        "configure(..., onlylocal=True) — less prod log traffic.",
         "Prod >> dev traffic — onlylocal=True when local-only OK.",
     ]
 

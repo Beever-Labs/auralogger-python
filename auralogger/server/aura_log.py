@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import threading
 import uuid
@@ -41,7 +42,6 @@ _hydration_cache_token: Optional[str] = None
 _hydration_cache_raw: Optional[Dict[str, Any]] = None
 _override_project_token: Optional[str] = None
 _override_user_secret: Optional[str] = None
-_onlylocal: Optional[bool] = None
 _send_buffer_lock = threading.Lock()
 _send_buffer: list[Dict[str, Any]] = []
 _flush_timer: Optional[threading.Timer] = None
@@ -390,9 +390,6 @@ def aura_log(
     except Exception as e:
         print(f"auralogger: failed to print log: {e}", file=sys.stderr)
 
-    if _onlylocal is True or auralogger.onlylocal is True:
-        return
-
     if console_only:
         return
 
@@ -407,21 +404,16 @@ def aura_log(
 
 class auralogger:
     """Logger wrapper over ``aura_log`` runtime behavior (configure, sync, log, close socket)."""
-    onlylocal: Optional[bool] = None
 
     @staticmethod
-    def configure(
+    def _apply_runtime_config(
         project_token: str,
-        user_secret: Optional[str] = None,
-        onlylocal: Optional[bool] = None,
+        user_secret: str,
     ) -> None:
-        global _override_project_token, _override_user_secret, _warned_incomplete_env, _onlylocal
+        global _override_project_token, _override_user_secret, _warned_incomplete_env
         global _hydration_cache_token, _hydration_cache_raw, _local_session_id
         _override_project_token = project_token
-        if user_secret is not None:
-            _override_user_secret = user_secret
-        _onlylocal = onlylocal
-        auralogger.onlylocal = onlylocal
+        _override_user_secret = user_secret
         _warned_incomplete_env = False
         _local_session_id = None
         with _hydrate_lock:
@@ -429,12 +421,51 @@ class auralogger:
             _hydration_cache_raw = None
 
     @staticmethod
+    def configure(
+        project_token: Optional[str] = None,
+        user_secret: Optional[str] = None,
+    ) -> None:
+        resolved_project_token = (
+            project_token.strip()
+            if isinstance(project_token, str)
+            else os.environ.get("AURALOGGER_PROJECT_TOKEN", "").strip()
+        )
+        resolved_user_secret = (
+            user_secret.strip()
+            if isinstance(user_secret, str)
+            else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
+        )
+        auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
+        if not resolved_project_token or not resolved_user_secret:
+            return
+        raw = fetch_proj_auth_payload(resolved_project_token)
+        project_id_raw = raw.get("project_id")
+        session_raw = raw.get("session")
+        project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
+        session = session_raw.strip() if isinstance(session_raw, str) else ""
+        if not project_id or not session:
+            raise ValueError(
+                "auralogger.configure: proj_auth response missing project id or session."
+            )
+        with _hydrate_lock:
+            global _hydration_cache_token, _hydration_cache_raw
+            _hydration_cache_token = resolved_project_token
+            _hydration_cache_raw = raw
+
+    @staticmethod
     def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
         trimmed = project_token.strip()
         if not trimmed:
             raise ValueError("auralogger.sync_from_secret: project token cannot be empty.")
+        resolved_user_secret = (
+            user_secret.strip()
+            if isinstance(user_secret, str)
+            else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
+        )
+        if not resolved_user_secret:
+            raise RuntimeError("Missing AURALOGGER_USER_SECRET")
 
-        auralogger.configure(trimmed, user_secret)
+        auralogger._apply_runtime_config(trimmed, resolved_user_secret)
         raw = fetch_proj_auth_payload(trimmed)
         project_id_raw = raw.get("project_id")
         session_raw = raw.get("session")

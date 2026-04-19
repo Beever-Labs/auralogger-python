@@ -29,13 +29,28 @@ class PublicApiNamingTests(unittest.TestCase):
             auralogger.close_socket()
         mocked.assert_called_once_with()
 
+    def test_configure_reads_env_and_fetches_proj_auth(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "AURALOGGER_PROJECT_TOKEN": "cipher-token",
+                "AURALOGGER_USER_SECRET": "secret-123",
+            },
+            clear=False,
+        ), patch(
+            "auralogger.server.aura_log.fetch_proj_auth_payload",
+            return_value={"project_id": "p1", "session": "s1", "styles": []},
+        ) as mocked:
+            auralogger.configure()
+        mocked.assert_called_once_with("cipher-token")
+
     def test_sync_from_secret_validates_required_fields(self) -> None:
         with patch(
             "auralogger.server.aura_log.fetch_proj_auth_payload",
             return_value={"project_id": "p1", "session": ""},
         ):
             with self.assertRaises(ValueError):
-                auralogger.sync_from_secret("cipher-token")
+                auralogger.sync_from_secret("cipher-token", "secret-123")
 
 
 if __name__ == "__main__":

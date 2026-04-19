@@ -23,7 +23,6 @@ from auralogger.cli.cli_style import (
     bold_white,
     dim,
     hex_color,
-    pad_visible,
     white,
 )
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
@@ -67,50 +66,15 @@ def _syntax_python_line(line: str) -> str:
     return hex_color(_VAL, s)
 
 
-def _print_onlylocal_production_dialog() -> None:
-    """Short tip: onlylocal avoids remote log traffic when deploying."""
-    lines_plain = [
-        "Deploying? Set onlylocal in configure for console-only logs.",
-        "No remote sends — no per-log network cost or delay.",
-    ]
-    inner_w = min(72, max(40, max(len(s) for s in lines_plain)))
-
-    def fit(s: str) -> str:
-        if len(s) > inner_w:
-            return s[: inner_w - 1] + "…"
-        return s + " " * (inner_w - len(s))
-
-    hbar = "─" * (inner_w + 2)
-    margin = "  "
-    print()
-    print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
-    for ln in lines_plain:
-        print(
-            hex_color("#8b949e", margin + "│ ")
-            + white(fit(ln))
-            + hex_color("#8b949e", " │")
-        )
-    print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
-    print()
-
 
 def _print_python_code_story(title: str, snippet: str) -> None:
     raw_lines = snippet.split("\n")
-    inner_w = min(96, max(40, max((len(s) for s in raw_lines), default=0)))
-    hbar = "─" * (inner_w + 2)
     margin = "  "
     print(bold_hex("#d2a8ff", margin + "📋 ") + bold_white(title))
     print()
-    print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
     for line in raw_lines:
         styled = _syntax_python_line(line)
-        padded = pad_visible(styled, inner_w)
-        print(
-            hex_color("#8b949e", margin + "│ ")
-            + padded
-            + hex_color("#8b949e", " │")
-        )
-    print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
+        print(margin + styled)
     print()
 
 
@@ -157,18 +121,9 @@ def print_copy_paste_env_block(
         lines.append(format_dotenv_line(ENV_PROJECT_SESSION, session_str))
 
     if lines:
-        inner_w = min(96, max(40, max(len(ln) for ln in lines)))
-        hbar = "─" * (inner_w + 2)
         margin = "  "
-        print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
         for ln in lines:
-            padded = ln + " " * max(0, inner_w - len(ln))
-            print(
-                hex_color("#8b949e", margin + "│ ")
-                + hex_color("#8b949e", padded)
-                + hex_color("#8b949e", " │")
-            )
-        print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
+            print(margin + hex_color("#8b949e", ln))
 
     if project_token_was_in_env:
         print()
@@ -205,19 +160,13 @@ def print_copy_paste_env_block(
 def _build_server_integration_snippet() -> str:
     return "\n".join(
         [
-            "import os",
             "from typing import Any, Dict, Literal, Optional",
             "from auralogger import auralogger",
             "",
-            "def configure_auralogger() -> None:",
-            "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
-            "    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()",
-            "    if not project_token or not user_secret:",
-            "        raise RuntimeError('Missing auralogger env variables')",
-            "    auralogger.sync_from_secret(project_token, user_secret)",
-            "    # onlylocal: set auralogger.onlylocal = True (or pass onlylocal=True to configure).",
-            "    # Prod generates far more log lines than dev → more traffic; use before prod when console-only is enough.",
-            "    # auralogger.onlylocal = True",
+            "# Call once at startup — reads AURALOGGER_PROJECT_TOKEN + AURALOGGER_USER_SECRET from env.",
+            "# Pass them explicitly if preferred: auralogger.configure(project_token, user_secret)",
+            "# Without credentials, logs print locally only.",
+            "auralogger.configure()",
             "",
             "def auralog(",
             "    type: Literal['debug', 'info', 'warn', 'error'],",
@@ -225,12 +174,7 @@ def _build_server_integration_snippet() -> str:
             "    location: Optional[str] = None,",
             "    data: Optional[Dict[str, Any]] = None,",
             ") -> None:",
-            "    auralogger.log(",
-            "        type,",
-            "        message,",
-            "        location,",
-            "        data,",
-            "    )",
+            "    auralogger.log(type, message, location, data)",
         ]
     )
 
@@ -288,7 +232,6 @@ def print_post_init_summary(
         user_secret,
     )
 
-    _print_onlylocal_production_dialog()
     print_init_helper_snippets()
 
 
@@ -318,7 +261,6 @@ def print_already_configured_success() -> None:
     a = pick_aside(INIT_ALREADY_STEVE_ASIDES)
     print_aside(a["emoji"], a["line"])
     print()
-    _print_onlylocal_production_dialog()
 
 
 def run_init() -> None:

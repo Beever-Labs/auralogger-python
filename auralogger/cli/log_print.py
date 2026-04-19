@@ -52,7 +52,7 @@ def _format_created_at_time_only(created_at: Any) -> str:
     return d.strftime("%H:%M:%S")
 
 
-def print_log(log: Mapping[str, Any], config_styles: Any) -> None:
+def print_log(log: Mapping[str, Any], config_styles: Any = None) -> None:
     type_raw = log.get("type")
     type_str = type_raw if isinstance(type_raw, str) else ""
     spec = resolve_log_style_spec(type_str, config_styles)

@@ -100,7 +100,7 @@ class InitParityTests(unittest.TestCase):
         fetch_proj_auth.assert_not_called()
         rendered = output.getvalue()
         self.assertIn("already has token", rendered)
-        self.assertIn("auralogger.sync_from_secret", rendered)
+        self.assertIn("auralogger.configure()", rendered)
 
     def test_run_init_normal_path_prints_integration_help(self) -> None:
         output = io.StringIO()

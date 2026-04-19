@@ -160,13 +160,21 @@ def print_copy_paste_env_block(
 def _build_server_integration_snippet() -> str:
     return "\n".join(
         [
+            "import os",
             "from typing import Any, Dict, Literal, Optional",
             "from auralogger import auralogger",
             "",
-            "# Call once at startup — reads AURALOGGER_PROJECT_TOKEN + AURALOGGER_USER_SECRET from env.",
-            "# Pass them explicitly if preferred: auralogger.configure(project_token, user_secret)",
-            "# Without credentials, logs print locally only.",
-            "auralogger.configure()",
+            "_configured = False",
+            "",
+            "def ensureConfigured() -> None:",
+            "    global _configured",
+            "    if _configured:",
+            "        return",
+            "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
+            "    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()",
+            "    # auralogger.configure()  — omit credentials to print locally only (no streaming).",
+            "    auralogger.configure(project_token, user_secret)",
+            "    _configured = True",
             "",
             "def auralog(",
             "    type: Literal['debug', 'info', 'warn', 'error'],",
@@ -174,6 +182,7 @@ def _build_server_integration_snippet() -> str:
             "    location: Optional[str] = None,",
             "    data: Optional[Dict[str, Any]] = None,",
             ") -> None:",
+            "    ensureConfigured()",
             "    auralogger.log(type, message, location, data)",
         ]
     )
@@ -203,7 +212,7 @@ def _build_server_usage_snippet() -> str:
 
 def print_init_helper_snippets() -> None:
     _print_python_code_story(
-        "auralogger — configure and log",
+        "auralogger — server wrapper (configure + log)",
         _build_server_integration_snippet(),
     )
     _print_python_code_story(

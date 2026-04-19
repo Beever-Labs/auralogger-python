@@ -11,7 +11,7 @@ Run CLI commands from the directory that contains your `.env` or `.env.local` (o
 **Use a project virtualenv** (`python -m venv .venv`) so the CLI and library version match the repo you are in. Auralogger is **project-scoped** (credentials per app), not a global “install once and forget which folder you are in” tool.
 
 ### 1) Install
- 
+
 From PyPI:
 
 ```bash
@@ -51,6 +51,7 @@ If token or user secret is missing after `.env` is loaded, the CLI will prompt b
 ### 4) Send logs from code
 
 Run `auralogger init` once and paste the printed module, or follow this shape: configure once (reads `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` from the environment), then call your helper.
+
 ```py
 import os
 from typing import Any, Dict, Literal, Optional
@@ -60,8 +61,7 @@ def ensureConfigured() -> None:
     project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()
     user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()
     auralogger.configure(project_token, user_secret)
-    # auralogger.configure()  for production or only terminal logs to save network cost 
-    # Prod generates far more log lines than dev → more traffic; use before prod when console-only is enough.
+    # auralogger.configure()  — omit credentials to print locally only (no streaming for removing network delay and cost).
    
 
 def auralog(
@@ -78,10 +78,6 @@ def auralog(
         data,
     )
 ```
-
-
-
-
 
 ```python
 from your_auralog_file import auralog
@@ -198,7 +194,7 @@ This package is for **Python on the server**. For React, Vue, Next, Vite, or any
 ## When something does not work
 
 - **Wrong directory** — Run the CLI from the folder that contains `.env`, or export variables in the shell.
-- **Logs never reach the dashboard** — Confirm `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` are set for the process (or passed explicitly in your configure step). Successful sends are quiet locally; problems may show as a one-time message on stderr.
+- **Logs never reach the dashboard** — Confirm `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` are set for the process (or passed explicitly in your configure step). Logs always print locally — if they're not reaching the dashboard, check credentials and network; send/socket failures surface as stderr messages.
 - `**get-logs` looks plain** — Optional style env vars are documented in `[user-docs/environment.md](user-docs/environment.md)`; the CLI can still resolve styling for a run when those are unset.
 
 ---

@@ -34,7 +34,6 @@ BATCH_MAX_SIZE = 30
 
 _ws: Optional[Any] = None
 _bound_url: Optional[str] = None
-_warned_incomplete_env = False
 _local_session_id: Optional[str] = None
 
 _hydrate_lock = threading.Lock()
@@ -337,45 +336,16 @@ def aura_log(
     data: Any = None,
 ) -> None:
     """
-    Print a styled log line locally and, when ``AURALOGGER_PROJECT_TOKEN``,
-    ``AURALOGGER_USER_SECRET``, and resolved project context are available,
-    send the same payload over the logging WebSocket.
+    Print a styled log line locally and, when ``AURALOGGER_PROJECT_TOKEN`` and
+    ``AURALOGGER_USER_SECRET`` are available, send the same payload over the logging WebSocket.
     """
-    global _warned_incomplete_env
-
     project_token = _resolve_project_token_runtime()
     user_secret = _resolve_user_secret_runtime()
-
-    merged = None
-    if project_token and user_secret:
-        merged = _merged_runtime_for_send(project_token)
-
-    can_send = bool(project_token and user_secret and merged is not None)
-    console_only = not can_send
-
-    if console_only and not _warned_incomplete_env:
-        _warned_incomplete_env = True
-        print(
-            "auralogger: logging to console only. Set "
-            "AURALOGGER_PROJECT_TOKEN and AURALOGGER_USER_SECRET; id/session/styles "
-            "can be filled via proj_auth when the API is reachable (run "
-            '"auralogger init" for env hints).',
-            file=sys.stderr,
-        )
-
-    styles = _styles_for_console(project_token, merged)
-
-    if console_only:
-        display_session = _get_or_create_local_session()
-    else:
-        assert merged is not None
-        sess = merged["session"]
-        display_session = sess if sess else _get_or_create_local_session()
 
     payload: Dict[str, Any] = {
         "type": _normalize_type(type),
         "message": "" if message is None else str(message),
-        "session": display_session,
+        "session": _get_or_create_local_session(),
         "created_at": _iso_timestamp_utc(),
     }
     loc = _normalize_location(location)
@@ -385,17 +355,18 @@ def aura_log(
     if data_str is not None:
         payload["data"] = data_str
 
+    styles = _styles_for_console(project_token, None)
     try:
         print_log(payload, styles)
     except Exception as e:
         print(f"auralogger: failed to print log: {e}", file=sys.stderr)
 
-    if console_only:
+    if not project_token or not user_secret:
         return
 
-    assert merged is not None
-    assert project_token is not None
-    assert user_secret is not None
+    merged = _merged_runtime_for_send(project_token)
+    if merged is None:
+        return
 
     send_payload = payload.copy()
     send_payload["session"] = merged["session"]
@@ -410,11 +381,10 @@ class auralogger:
         project_token: str,
         user_secret: str,
     ) -> None:
-        global _override_project_token, _override_user_secret, _warned_incomplete_env
+        global _override_project_token, _override_user_secret
         global _hydration_cache_token, _hydration_cache_raw, _local_session_id
         _override_project_token = project_token
         _override_user_secret = user_secret
-        _warned_incomplete_env = False
         _local_session_id = None
         with _hydrate_lock:
             _hydration_cache_token = None

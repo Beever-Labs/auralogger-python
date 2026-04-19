@@ -11,7 +11,7 @@ Run CLI commands from the directory that contains your `.env` or `.env.local` (o
 **Use a project virtualenv** (`python -m venv .venv`) so the CLI and library version match the repo you are in. Auralogger is **project-scoped** (credentials per app), not a global “install once and forget which folder you are in” tool.
 
 ### 1) Install
-
+ 
 From PyPI:
 
 ```bash
@@ -51,8 +51,37 @@ If token or user secret is missing after `.env` is loaded, the CLI will prompt b
 ### 4) Send logs from code
 
 Run `auralogger init` once and paste the printed module, or follow this shape: configure once (reads `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` from the environment), then call your helper.
+```py
+import os
+from typing import Any, Dict, Literal, Optional
+from auralogger import auralogger
 
-**`onlylocal` — less network overhead:** after `configure` / `sync_from_secret`, set `**auralogger.onlylocal = True**` or pass `**onlylocal=True**` into `**auralogger.configure(...)**` so each log stays **console-only** (no WebSocket send per log). **Production** emits more log lines than dev, so that traffic adds up—**we recommend** wiring this before you push to production when console-only output is enough; leave it unset or use `**False**` when you need every line sent remotely.
+def ensureConfigured() -> None:
+    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()
+    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()
+    auralogger.configure(project_token, user_secret)
+    # auralogger.configure()  for production or only terminal logs to save network cost 
+    # Prod generates far more log lines than dev → more traffic; use before prod when console-only is enough.
+   
+
+def auralog(
+    type: Literal['debug', 'info', 'warn', 'error'],
+    message: str,
+    location: Optional[str] = None,
+    data: Optional[Dict[str, Any]] = None,
+) -> None:
+    ensureConfigured()
+    auralogger.log(
+        type,
+        message,
+        location,
+        data,
+    )
+```
+
+
+
+
 
 ```python
 from your_auralog_file import auralog

@@ -4,6 +4,21 @@ from __future__ import annotations
 
 import re
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI SGR sequences so string length matches visible terminal width."""
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
+def pad_visible(text: str, width: int) -> str:
+    """Right-pad text that may contain ANSI codes to a visible column width."""
+    n = len(strip_ansi(text))
+    if n >= width:
+        return text
+    return text + " " * (width - n)
+
 
 def _rgb_fg(r: int, g: int, b: int, text: str) -> str:
     r = max(0, min(255, r))

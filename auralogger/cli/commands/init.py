@@ -23,6 +23,7 @@ from auralogger.cli.cli_style import (
     bold_white,
     dim,
     hex_color,
+    pad_visible,
     white,
 )
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
@@ -67,43 +68,49 @@ def _syntax_python_line(line: str) -> str:
 
 
 def _print_onlylocal_production_dialog() -> None:
-    """ASCII ‘log viewer’ box — prod generates more log lines → more traffic."""
-    inner_w = 56
-    title = "[LOG] onlylocal · prod traffic >> dev"
-    lines = [
-        "Prod >> dev: log lines multiply fast — bytes on the wire follow.",
-        "configure(..., onlylocal=True) — less prod log traffic.",
-        "Prod >> dev traffic — onlylocal=True when local-only OK.",
+    """Short tip: onlylocal avoids remote log traffic when deploying."""
+    lines_plain = [
+        "Deploying? Set onlylocal in configure for console-only logs.",
+        "No remote sends — no per-log network cost or delay.",
     ]
+    inner_w = min(72, max(40, max(len(s) for s in lines_plain)))
 
     def fit(s: str) -> str:
         if len(s) > inner_w:
             return s[: inner_w - 1] + "…"
         return s + " " * (inner_w - len(s))
 
-    pipe = "│"
     hbar = "─" * (inner_w + 2)
-
+    margin = "  "
     print()
-    print(hex_color("#8b949e", "  ╭" + hbar + "╮"))
-    print(hex_color("#8b949e", "  " + pipe + " ") + bold_hex("#79c0ff", fit(title)) + hex_color("#8b949e", " " + pipe))
-    print(hex_color("#8b949e", "  ├" + hbar + "┤"))
-    for ln in lines:
-        print(hex_color("#8b949e", "  " + pipe + " ") + white(fit(ln)) + hex_color("#8b949e", " " + pipe))
-    print(hex_color("#8b949e", "  ╰" + hbar + "╯"))
-    print(
-        dim("     ")
-        + hex_color("#ffa657", "tip ")
-        + dim("— production costs more traffic per deploy; onlylocal skips remote per-log work.")
-    )
+    print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
+    for ln in lines_plain:
+        print(
+            hex_color("#8b949e", margin + "│ ")
+            + white(fit(ln))
+            + hex_color("#8b949e", " │")
+        )
+    print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
     print()
 
 
 def _print_python_code_story(title: str, snippet: str) -> None:
-    print(bold_hex("#d2a8ff", "  📋 ") + bold_white(title))
+    raw_lines = snippet.split("\n")
+    inner_w = min(96, max(40, max((len(s) for s in raw_lines), default=0)))
+    hbar = "─" * (inner_w + 2)
+    margin = "  "
+    print(bold_hex("#d2a8ff", margin + "📋 ") + bold_white(title))
     print()
-    for line in snippet.split("\n"):
-        print("  " + _syntax_python_line(line))
+    print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
+    for line in raw_lines:
+        styled = _syntax_python_line(line)
+        padded = pad_visible(styled, inner_w)
+        print(
+            hex_color("#8b949e", margin + "│ ")
+            + padded
+            + hex_color("#8b949e", " │")
+        )
+    print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
     print()
 
 
@@ -149,8 +156,19 @@ def print_copy_paste_env_block(
     if not session_was_in_env and session_str:
         lines.append(format_dotenv_line(ENV_PROJECT_SESSION, session_str))
 
-    for line in lines:
-        print(hex_color("#8b949e", line))
+    if lines:
+        inner_w = min(96, max(40, max(len(ln) for ln in lines)))
+        hbar = "─" * (inner_w + 2)
+        margin = "  "
+        print(hex_color("#8b949e", margin + "╭" + hbar + "╮"))
+        for ln in lines:
+            padded = ln + " " * max(0, inner_w - len(ln))
+            print(
+                hex_color("#8b949e", margin + "│ ")
+                + hex_color("#8b949e", padded)
+                + hex_color("#8b949e", " │")
+            )
+        print(hex_color("#8b949e", margin + "╰" + hbar + "╯"))
 
     if project_token_was_in_env:
         print()

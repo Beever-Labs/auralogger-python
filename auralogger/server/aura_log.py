@@ -38,6 +38,7 @@ _hydration_cache_token: Optional[str] = None
 _hydration_cache_raw: Optional[Dict[str, Any]] = None
 _override_project_token: Optional[str] = None
 _override_user_secret: Optional[str] = None
+_onlylocal: Optional[bool] = None
 
 
 def _encode_path_token(project_token: str) -> str:
@@ -319,6 +320,9 @@ def aura_log(
     except Exception as e:
         print(f"auralogger: failed to print log: {e}", file=sys.stderr)
 
+    if _onlylocal is True or auralogger.onlylocal is True:
+        return
+
     if console_only:
         return
 
@@ -337,14 +341,21 @@ def aura_log(
 
 class auralogger:
     """Logger wrapper over ``aura_log`` runtime behavior (configure, sync, log, close socket)."""
+    onlylocal: Optional[bool] = None
 
     @staticmethod
-    def configure(project_token: str, user_secret: Optional[str] = None) -> None:
-        global _override_project_token, _override_user_secret, _warned_incomplete_env
+    def configure(
+        project_token: str,
+        user_secret: Optional[str] = None,
+        onlylocal: Optional[bool] = None,
+    ) -> None:
+        global _override_project_token, _override_user_secret, _warned_incomplete_env, _onlylocal
         global _hydration_cache_token, _hydration_cache_raw, _local_session_id
         _override_project_token = project_token
         if user_secret is not None:
             _override_user_secret = user_secret
+        _onlylocal = onlylocal
+        auralogger.onlylocal = onlylocal
         _warned_incomplete_env = False
         _local_session_id = None
         with _hydrate_lock:

@@ -66,6 +66,39 @@ def _syntax_python_line(line: str) -> str:
     return hex_color(_VAL, s)
 
 
+def _print_onlylocal_production_dialog() -> None:
+    """ASCII ‘log viewer’ box — prod generates more log lines → more traffic."""
+    inner_w = 56
+    title = "[LOG] onlylocal · prod traffic >> dev"
+    lines = [
+        "Production >> dev: more users/events → more log lines → more traffic.",
+        "onlylocal=True — 3rd kw on configure(...) or set auralogger.onlylocal.",
+        "Prod >> dev traffic — onlylocal=True when local-only OK.",
+    ]
+
+    def fit(s: str) -> str:
+        if len(s) > inner_w:
+            return s[: inner_w - 1] + "…"
+        return s + " " * (inner_w - len(s))
+
+    pipe = "│"
+    hbar = "─" * (inner_w + 2)
+
+    print()
+    print(hex_color("#8b949e", "  ╭" + hbar + "╮"))
+    print(hex_color("#8b949e", "  " + pipe + " ") + bold_hex("#79c0ff", fit(title)) + hex_color("#8b949e", " " + pipe))
+    print(hex_color("#8b949e", "  ├" + hbar + "┤"))
+    for ln in lines:
+        print(hex_color("#8b949e", "  " + pipe + " ") + white(fit(ln)) + hex_color("#8b949e", " " + pipe))
+    print(hex_color("#8b949e", "  ╰" + hbar + "╯"))
+    print(
+        dim("     ")
+        + hex_color("#ffa657", "tip ")
+        + dim("— production costs more traffic per deploy; onlylocal skips remote per-log work.")
+    )
+    print()
+
+
 def _print_python_code_story(title: str, snippet: str) -> None:
     print(bold_hex("#d2a8ff", "  📋 ") + bold_white(title))
     print()
@@ -164,6 +197,9 @@ def _build_server_integration_snippet() -> str:
             "    if not project_token or not user_secret:",
             "        raise RuntimeError('Missing auralogger env variables')",
             "    auralogger.sync_from_secret(project_token, user_secret)",
+            "    # onlylocal: set auralogger.onlylocal = True (or pass onlylocal=True to configure).",
+            "    # Prod generates far more log lines than dev → more traffic; use before prod when console-only is enough.",
+            "    # auralogger.onlylocal = True",
             "",
             "def auralog(",
             "    type: Literal['debug', 'info', 'warn', 'error'],",
@@ -234,7 +270,7 @@ def print_post_init_summary(
         user_secret,
     )
 
-    print()
+    _print_onlylocal_production_dialog()
     print_init_helper_snippets()
 
 
@@ -264,6 +300,7 @@ def print_already_configured_success() -> None:
     a = pick_aside(INIT_ALREADY_STEVE_ASIDES)
     print_aside(a["emoji"], a["line"])
     print()
+    _print_onlylocal_production_dialog()
 
 
 def run_init() -> None:

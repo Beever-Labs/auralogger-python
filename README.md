@@ -52,6 +52,8 @@ If token or user secret is missing after `.env` is loaded, the CLI will prompt b
 
 Run `auralogger init` once and paste the printed module, or follow this shape: configure once (reads `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` from the environment), then call your helper.
 
+**`onlylocal` — less network overhead:** after `configure` / `sync_from_secret`, set `**auralogger.onlylocal = True**` or pass `**onlylocal=True**` into `**auralogger.configure(...)**` so each log stays **console-only** (no WebSocket send per log). **Production** emits more log lines than dev, so that traffic adds up—**we recommend** wiring this before you push to production when console-only output is enough; leave it unset or use `**False**` when you need every line sent remotely.
+
 ```python
 from your_auralog_file import auralog
 

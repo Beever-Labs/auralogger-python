@@ -50,7 +50,32 @@ If token or user secret is missing after `.env` is loaded, the CLI will prompt b
 
 ### 4) Send logs from code
 
-Run `auralogger init` once and paste the printed module, or follow this shape: configure once (reads `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` from the environment), then call your helper.
+Run `auralogger init` once and paste the printed module, or follow the shapes below.
+
+**Encryption is optional per project.** If your project has **no encryption enabled**, you only need `AURALOGGER_PROJECT_TOKEN` and you can configure without a user secret. If your project **is encrypted**, you’ll configure with both `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`.
+
+#### No encryption (recommended first): token only
+
+```py
+import os
+from typing import Any, Dict, Literal, Optional
+from auralogger import auralogger
+
+def ensureConfigured() -> None:
+    project_token = os.environ.get("AURALOGGER_PROJECT_TOKEN", "").strip()
+    auralogger.configure(project_token)
+
+def auralog(
+    type: Literal["debug", "info", "warn", "error"],
+    message: str,
+    location: Optional[str] = None,
+    data: Optional[Dict[str, Any]] = None,
+) -> None:
+    ensureConfigured()
+    auralogger.log(type, message, location, data)
+```
+
+#### Encrypted projects: token + user secret
 
 ```py
 import os

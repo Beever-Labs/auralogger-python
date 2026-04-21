@@ -26,7 +26,11 @@ from auralogger.cli.log_print import print_log
 from auralogger.cli.log_styles import build_style_entries_from_api
 from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.backend_origin import build_project_logs_url, resolve_api_base_url
-from auralogger.utils.env_config import get_resolved_project_token, try_parse_resolved_styles
+from auralogger.utils.env_config import (
+    get_resolved_project_token,
+    get_resolved_user_secret,
+    try_parse_resolved_styles,
+)
 from auralogger.utils.http_utils import parse_error_body
 from auralogger.utils.parser import parse_command
 
@@ -173,25 +177,33 @@ def run_get_logs(argv: List[str]) -> None:
 
     project_token = resolve_project_token_for_init()
 
-    print(dim("🔐 ") + white("Authenticating with Auralogger…"))
-
     user_secret = ""
     config_styles: Any = try_parse_resolved_styles()
-    try:
-        raw = fetch_proj_auth_payload(project_token)
-        enc = raw.get("encrypted")
-        if enc if isinstance(enc, bool) else True:
-            user_secret = resolve_user_secret_for_init()
-        if config_styles is None:
-            styles_raw = raw.get("styles")
-            rows = styles_raw if isinstance(styles_raw, list) else []
-            config_styles = build_style_entries_from_api(rows)
-    except ValueError as e:
-        print(
-            yellow("⚠️ ")
-            + white(f"Couldn't reach Auralogger for auth ({e}). Using env config if available.")
-        )
+
+    # If we already have a secret locally, assume encrypted and skip proj_auth.
+    if get_resolved_user_secret() is not None:
         user_secret = resolve_user_secret_for_init()
+    else:
+        print(dim("🔐 ") + white("Authenticating with Auralogger…"))
+        try:
+            raw = fetch_proj_auth_payload(project_token)
+            enc = raw.get("encrypted")
+            if not isinstance(enc, bool):
+                enc = raw.get("encryption")
+            if enc if isinstance(enc, bool) else True:
+                user_secret = resolve_user_secret_for_init()
+            if config_styles is None:
+                styles_raw = raw.get("styles")
+                rows = styles_raw if isinstance(styles_raw, list) else []
+                config_styles = build_style_entries_from_api(rows)
+        except ValueError as e:
+            print(
+                yellow("⚠️ ")
+                + white(
+                    f"Couldn't reach Auralogger for auth ({e}). Using env config if available."
+                )
+            )
+            user_secret = resolve_user_secret_for_init()
 
     if config_styles is None:
         config_styles = build_style_entries_from_api([])

@@ -68,6 +68,8 @@ def _build_ws_url(project_token: str) -> str:
 
 def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
     enc = raw.get("encrypted")
+    if not isinstance(enc, bool):
+        enc = raw.get("encryption")
     return enc if isinstance(enc, bool) else True
 
 

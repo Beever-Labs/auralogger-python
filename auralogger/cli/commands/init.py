@@ -36,6 +36,7 @@ from auralogger.utils.env_config import (
     get_resolved_project_token,
     get_resolved_session,
     get_resolved_user_secret,
+    is_full_runtime_env_configured,
 )
 
 _KW = "#ff7b72"
@@ -82,6 +83,8 @@ def build_init_payload(
     styles_raw = auth_response.get("styles")
     api_rows = styles_raw if isinstance(styles_raw, list) else []
     enc = auth_response.get("encrypted")
+    if not isinstance(enc, bool):
+        enc = auth_response.get("encryption")
     return {
         "project_token": project_token,
         "project_id": auth_response.get("project_id"),
@@ -251,7 +254,7 @@ def _build_no_encrypt_integration_snippet() -> str:
 def print_init_helper_snippets(encrypted: bool = True) -> None:
     if encrypted:
         _print_python_code_story(
-            "auralogger — server wrapper (configure + log)",
+            "auralogger — configure and log",
             _build_server_integration_snippet(),
         )
         _print_python_code_story(
@@ -332,6 +335,12 @@ def run_init() -> None:
     if get_command_attempt_count("init") >= 2:
         a = pick_aside(INIT_REPEAT_INTENT_ASIDES)
         print_aside_maybe(a["emoji"], a["line"], 0.12)
+
+    # Fast-path: if token + secret + session are already present, skip proj_auth/prompting.
+    if is_full_runtime_env_configured():
+        print_already_configured_success(True)
+        maybe_print_generic_spice()
+        return
 
     has_project_token = get_resolved_project_token() is not None
     project_token_was_in_env = has_project_token

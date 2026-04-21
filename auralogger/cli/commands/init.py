@@ -113,7 +113,7 @@ def print_copy_paste_env_block(
     else:
         print(
             dim(
-                "   No encryption — just your project token and session. No user secret needed."
+                "   No encryption — just your project token and session needed."
             )
         )
     print()

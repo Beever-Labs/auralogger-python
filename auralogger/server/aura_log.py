@@ -263,7 +263,7 @@ def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
 def _ensure_ws(project_token: str, user_secret: str):
     global _ws, _bound_url
     url = _build_ws_url(project_token)
-    if _ws is not None and _bound_url == url:
+    if _ws is not None and _bound_url == url and _ws.connected:
         return _ws
     _close_ws_connection()
     conn = create_connection(

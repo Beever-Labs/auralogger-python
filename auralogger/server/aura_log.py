@@ -41,6 +41,7 @@ _hydration_cache_token: Optional[str] = None
 _hydration_cache_raw: Optional[Dict[str, Any]] = None
 _override_project_token: Optional[str] = None
 _override_user_secret: Optional[str] = None
+_encrypted: bool = True
 _send_buffer_lock = threading.Lock()
 _send_buffer: list[Dict[str, Any]] = []
 _flush_timer: Optional[threading.Timer] = None
@@ -63,6 +64,16 @@ def _encode_path_token(project_token: str) -> str:
 def _build_ws_url(project_token: str) -> str:
     encoded = _encode_path_token(project_token)
     return f"{resolve_ws_base_url()}/{encoded}/create_log"
+
+
+def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
+    enc = raw.get("encrypted")
+    return enc if isinstance(enc, bool) else True
+
+
+def _build_ws_url_no_auth(project_token: str) -> str:
+    encoded = _encode_path_token(project_token)
+    return f"{resolve_ws_base_url()}/{encoded}/create_browser_logs"
 
 
 def _is_plain_object(value: Any) -> bool:
@@ -170,8 +181,8 @@ def close_aura_log_socket() -> None:
     """Close the cached WebSocket and drop cached ``proj_auth`` data for this process."""
     global _hydration_cache_token, _hydration_cache_raw
     project_token = _resolve_project_token_runtime()
-    user_secret = _resolve_user_secret_runtime()
-    if project_token and user_secret:
+    user_secret = _resolve_user_secret_runtime() or ""
+    if project_token and (user_secret or not _encrypted):
         _flush_buffer_now(project_token, user_secret)
     else:
         with _send_buffer_lock:
@@ -262,14 +273,15 @@ def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
 
 def _ensure_ws(project_token: str, user_secret: str):
     global _ws, _bound_url
-    url = _build_ws_url(project_token)
+    url = _build_ws_url_no_auth(project_token) if not _encrypted else _build_ws_url(project_token)
     if _ws is not None and _bound_url == url and _ws.connected:
         return _ws
     _close_ws_connection()
+    headers = [] if not _encrypted else [f"Authorization: Bearer {user_secret}"]
     conn = create_connection(
         url,
         timeout=CONNECT_TIMEOUT_S,
-        header=[f"Authorization: Bearer {user_secret}"],
+        header=headers,
     )
     _ws = conn
     _bound_url = url
@@ -361,7 +373,9 @@ def aura_log(
     except Exception as e:
         print(f"auralogger: failed to print log: {e}", file=sys.stderr)
 
-    if not project_token or not user_secret:
+    if not project_token:
+        return
+    if _encrypted and not user_secret:
         return
 
     merged = _merged_runtime_for_send(project_token)
@@ -370,7 +384,7 @@ def aura_log(
 
     send_payload = payload.copy()
     send_payload["session"] = merged["session"]
-    _enqueue_payload_for_send(project_token, user_secret, send_payload)
+    _enqueue_payload_for_send(project_token, user_secret or "", send_payload)
 
 
 class auralogger:
@@ -380,11 +394,13 @@ class auralogger:
     def _apply_runtime_config(
         project_token: str,
         user_secret: str,
+        enc: bool = True,
     ) -> None:
-        global _override_project_token, _override_user_secret
+        global _override_project_token, _override_user_secret, _encrypted
         global _hydration_cache_token, _hydration_cache_raw, _local_session_id
         _override_project_token = project_token
         _override_user_secret = user_secret
+        _encrypted = enc
         _local_session_id = None
         with _hydrate_lock:
             _hydration_cache_token = None
@@ -405,10 +421,14 @@ class auralogger:
             if isinstance(user_secret, str)
             else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
         )
-        auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
-        if not resolved_project_token or not resolved_user_secret:
+        if not resolved_project_token:
+            auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
             return
         raw = fetch_proj_auth_payload(resolved_project_token)
+        enc = _read_encrypted_flag(raw)
+        auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret, enc)
+        if enc and not resolved_user_secret:
+            return
         project_id_raw = raw.get("project_id")
         session_raw = raw.get("session")
         project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
@@ -427,16 +447,16 @@ class auralogger:
         trimmed = project_token.strip()
         if not trimmed:
             raise ValueError("auralogger.sync_from_secret: project token cannot be empty.")
+        raw = fetch_proj_auth_payload(trimmed)
+        enc = _read_encrypted_flag(raw)
         resolved_user_secret = (
             user_secret.strip()
             if isinstance(user_secret, str)
             else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
         )
-        if not resolved_user_secret:
+        if enc and not resolved_user_secret:
             raise RuntimeError("Missing AURALOGGER_USER_SECRET")
-
-        auralogger._apply_runtime_config(trimmed, resolved_user_secret)
-        raw = fetch_proj_auth_payload(trimmed)
+        auralogger._apply_runtime_config(trimmed, resolved_user_secret, enc)
         project_id_raw = raw.get("project_id")
         session_raw = raw.get("session")
         project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""

@@ -19,7 +19,7 @@ from auralogger.cli.aside_pools import (
 from auralogger.cli.cli_auth import resolve_project_token_for_init, resolve_user_secret_for_init
 from auralogger.cli.cli_load_env import ensure_utf8_stdio
 from auralogger.cli.cli_personality_state import get_successful_run_count
-from auralogger.cli.cli_style import bold_hex, cyan, dim, hex_color, white, yellow
+from auralogger.cli.cli_style import bold_hex, cyan, dim, white, yellow
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
 from auralogger.cli.get_logs_filters import normalize_and_validate_filters
 from auralogger.cli.log_print import print_log
@@ -62,11 +62,10 @@ def _post_logs(
 ) -> Tuple[Dict[str, Any], bool]:
     route = build_project_logs_url(base_url, project_token)
     body_bytes = json.dumps({"filters": filters}).encode("utf8")
-    headers = {
-        "secret": user_secret,
-        "user_secret": user_secret,
-        "Content-Type": "application/json",
-    }
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if user_secret:
+        headers["secret"] = user_secret
+        headers["user_secret"] = user_secret
     req = urllib.request.Request(route, data=body_bytes, method="POST", headers=headers)
     try:
         with urllib.request.urlopen(req) as resp:
@@ -113,32 +112,6 @@ def _post_logs(
     if not _is_record(body):
         raise ValueError("The log list didn’t look right. Weird — try again.")
     return cast(Dict[str, Any], body), False
-
-
-def _resolve_config_styles(project_token: str) -> List[Any]:
-    from_env = try_parse_resolved_styles()
-    if from_env is not None:
-        return from_env
-    try:
-        raw = fetch_proj_auth_payload(project_token)
-        styles_raw = raw.get("styles")
-        rows = styles_raw if isinstance(styles_raw, list) else []
-        return build_style_entries_from_api(rows)
-    except ValueError as e:
-        print(
-            yellow("⚠️ ")
-            + white(
-                f"Couldn’t load styles from the API ({e}). Using default terminal colors for log lines."
-            )
-        )
-        print(
-            dim("   Set ")
-            + cyan("AURALOGGER_PROJECT_STYLES")
-            + dim(" (or NEXT_PUBLIC_/VITE_…) from ")
-            + cyan("auralogger init")
-            + dim(" to match the dashboard, or fix API/network access.")
-        )
-        return build_style_entries_from_api([])
 
 
 def run_get_logs_core(
@@ -199,8 +172,30 @@ def run_get_logs(argv: List[str]) -> None:
     print_aside_maybe(a["emoji"], a["line"], 0.12)
 
     project_token = resolve_project_token_for_init()
-    user_secret = resolve_user_secret_for_init()
-    config_styles = _resolve_config_styles(project_token)
 
+    print(dim("🔐 ") + white("Authenticating with Auralogger…"))
+
+    user_secret = ""
+    config_styles: Any = try_parse_resolved_styles()
+    try:
+        raw = fetch_proj_auth_payload(project_token)
+        enc = raw.get("encrypted")
+        if enc if isinstance(enc, bool) else True:
+            user_secret = resolve_user_secret_for_init()
+        if config_styles is None:
+            styles_raw = raw.get("styles")
+            rows = styles_raw if isinstance(styles_raw, list) else []
+            config_styles = build_style_entries_from_api(rows)
+    except ValueError as e:
+        print(
+            yellow("⚠️ ")
+            + white(f"Couldn't reach Auralogger for auth ({e}). Using env config if available.")
+        )
+        user_secret = resolve_user_secret_for_init()
+
+    if config_styles is None:
+        config_styles = build_style_entries_from_api([])
+
+    print(dim("📦 ") + white("Fetching logs…"))
     run_get_logs_core(project_token, user_secret, config_styles, argv)
     maybe_print_generic_spice()

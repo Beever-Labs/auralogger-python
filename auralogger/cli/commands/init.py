@@ -36,7 +36,6 @@ from auralogger.utils.env_config import (
     get_resolved_project_token,
     get_resolved_session,
     get_resolved_user_secret,
-    is_full_runtime_env_configured,
 )
 
 _KW = "#ff7b72"
@@ -66,7 +65,6 @@ def _syntax_python_line(line: str) -> str:
     return hex_color(_VAL, s)
 
 
-
 def _print_python_code_story(title: str, snippet: str) -> None:
     raw_lines = snippet.split("\n")
     margin = "  "
@@ -83,11 +81,13 @@ def build_init_payload(
 ) -> Dict[str, Any]:
     styles_raw = auth_response.get("styles")
     api_rows = styles_raw if isinstance(styles_raw, list) else []
+    enc = auth_response.get("encrypted")
     return {
         "project_token": project_token,
         "project_id": auth_response.get("project_id"),
         "session": auth_response.get("session"),
         "styles": build_style_entries_from_api(api_rows),
+        "encrypted": enc if isinstance(enc, bool) else True,
     }
 
 
@@ -100,14 +100,22 @@ def print_copy_paste_env_block(
 ) -> None:
     session = payload.get("session")
     session_str = session.strip() if isinstance(session, str) else ""
+    encrypted: bool = payload.get("encrypted", True)  # type: ignore[assignment]
 
     print()
     print(bold_hex("#79c0ff", "📋 ") + bold_white("Copy-paste env block"))
-    print(
-        dim(
-            "   Up to three lines when everything’s new: project token, user secret, session."
+    if encrypted:
+        print(
+            dim(
+                "   Up to three lines when everything’s new: project token, user secret, session."
+            )
         )
-    )
+    else:
+        print(
+            dim(
+                "   No encryption — just your project token and session. No user secret needed."
+            )
+        )
     print()
 
     lines: List[str] = []
@@ -115,7 +123,7 @@ def print_copy_paste_env_block(
         pt = payload.get("project_token")
         tok = pt if isinstance(pt, str) else ""
         lines.append(format_dotenv_line(ENV_PROJECT_TOKEN, tok))
-    if not user_secret_was_in_env:
+    if encrypted and not user_secret_was_in_env and user_secret:
         lines.append(format_dotenv_line(ENV_USER_SECRET, user_secret))
     if not session_was_in_env and session_str:
         lines.append(format_dotenv_line(ENV_PROJECT_SESSION, session_str))
@@ -134,7 +142,7 @@ def print_copy_paste_env_block(
             )
         )
 
-    if project_token_was_in_env or user_secret_was_in_env or session_was_in_env:
+    if project_token_was_in_env or (encrypted and user_secret_was_in_env) or session_was_in_env:
         print()
         if project_token_was_in_env:
             print(
@@ -142,7 +150,7 @@ def print_copy_paste_env_block(
                 + white("Project token")
                 + dim(" was already set — token line omitted above.")
             )
-        if user_secret_was_in_env:
+        if encrypted and user_secret_was_in_env:
             print(
                 dim("   ")
                 + white(ENV_USER_SECRET)
@@ -210,15 +218,55 @@ def _build_server_usage_snippet() -> str:
     )
 
 
-def print_init_helper_snippets() -> None:
-    _print_python_code_story(
-        "auralogger — server wrapper (configure + log)",
-        _build_server_integration_snippet(),
+def _build_no_encrypt_integration_snippet() -> str:
+    return "\n".join(
+        [
+            "import os",
+            "from typing import Any, Dict, Literal, Optional",
+            "from auralogger import auralogger",
+            "",
+            "_configured = False",
+            "",
+            "def ensureConfigured() -> None:",
+            "    global _configured",
+            "    if _configured:",
+            "        return",
+            "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
+            "    # No user secret needed — encryption is disabled for this project.",
+            "    auralogger.configure(project_token)",
+            "    _configured = True",
+            "",
+            "def auralog(",
+            "    type: Literal['debug', 'info', 'warn', 'error'],",
+            "    message: str,",
+            "    location: Optional[str] = None,",
+            "    data: Optional[Dict[str, Any]] = None,",
+            ") -> None:",
+            "    ensureConfigured()",
+            "    auralogger.log(type, message, location, data)",
+        ]
     )
-    _print_python_code_story(
-        "Using your generated auralog helper (server example logs)",
-        _build_server_usage_snippet(),
-    )
+
+
+def print_init_helper_snippets(encrypted: bool = True) -> None:
+    if encrypted:
+        _print_python_code_story(
+            "auralogger — server wrapper (configure + log)",
+            _build_server_integration_snippet(),
+        )
+        _print_python_code_story(
+            "Using your generated auralog helper (server example logs)",
+            _build_server_usage_snippet(),
+        )
+    else:
+        _print_python_code_story(
+            "auralogger — centralized logger, no encryption (token only)",
+            _build_no_encrypt_integration_snippet(),
+        )
+        _print_python_code_story(
+            "Using your generated auralog helper (example logs)",
+            _build_server_usage_snippet(),
+        )
     print()
 
 
@@ -229,6 +277,7 @@ def print_post_init_summary(
     session_was_already_in_env: bool,
     user_secret: str,
 ) -> None:
+    encrypted: bool = payload.get("encrypted", True)  # type: ignore[assignment]
     print()
     a = pick_aside(INIT_SESSION_TONY_ASIDES)
     print_aside(a["emoji"], a["line"])
@@ -241,7 +290,7 @@ def print_post_init_summary(
         user_secret,
     )
 
-    print_init_helper_snippets()
+    print_init_helper_snippets(encrypted)
 
 
 def print_init_welcome_banner() -> None:
@@ -255,16 +304,22 @@ def print_init_welcome_banner() -> None:
     print()
 
 
-def print_already_configured_success() -> None:
+def print_already_configured_success(encrypted: bool = True) -> None:
     print()
-    print(
-        bold_hex("#ffa657", "🎉 ")
-        + white("Plot twist — this shell already has token, user secret, and session.")
-    )
+    if encrypted:
+        print(
+            bold_hex("#ffa657", "🎉 ")
+            + white("Plot twist — this shell already has token, user secret, and session.")
+        )
+    else:
+        print(
+            bold_hex("#ffa657", "🎉 ")
+            + white("Already set — this shell has token and session. No encryption, no secret needed.")
+        )
     a = pick_aside(INIT_ALREADY_STRANGE_ASIDES)
     print_aside(a["emoji"], a["line"])
     print()
-    print_init_helper_snippets()
+    print_init_helper_snippets(encrypted)
     a = pick_aside(INIT_ALREADY_LOKI_ASIDES)
     print_aside(a["emoji"], a["line"])
     a = pick_aside(INIT_ALREADY_STEVE_ASIDES)
@@ -285,11 +340,6 @@ def run_init() -> None:
     has_session = get_resolved_session() is not None
     session_was_in_env = has_session
 
-    if is_full_runtime_env_configured():
-        print_already_configured_success()
-        maybe_print_generic_spice()
-        return
-
     print_init_welcome_banner()
 
     if has_project_token and not has_session:
@@ -301,10 +351,26 @@ def run_init() -> None:
         print_aside(a["emoji"], a["line"])
 
     project_token = resolve_project_token_for_init()
-    user_secret = resolve_user_secret_for_init()
 
     raw = fetch_proj_auth_payload(project_token)
     payload = build_init_payload(cast(Dict[str, Any], raw), project_token)
+    encrypted: bool = payload.get("encrypted", True)  # type: ignore[assignment]
+
+    # Already-configured check — for non-encrypted: token + session is enough.
+    if not encrypted and has_project_token and has_session:
+        print_already_configured_success(False)
+        maybe_print_generic_spice()
+        return
+
+    # For encrypted: all three must be present.
+    if encrypted and has_project_token and has_user_secret and has_session:
+        print_already_configured_success(True)
+        maybe_print_generic_spice()
+        return
+
+    user_secret = ""
+    if encrypted:
+        user_secret = resolve_user_secret_for_init()
 
     print_post_init_summary(
         payload,
@@ -313,13 +379,14 @@ def run_init() -> None:
         session_was_in_env,
         user_secret,
     )
-    print(
-        hex_color("#ffa657", "🎬 ")
-        + dim("Curtain call: ")
-        + hex_color("#79c0ff", "auralogger server-check")
-        + dim(" when the server pipe should flex too.")
-    )
-    a = pick_aside(INIT_CURTAIN_TONY_ASIDES)
-    print_aside(a["emoji"], a["line"])
+    if encrypted:
+        print(
+            hex_color("#ffa657", "🎬 ")
+            + dim("Curtain call: ")
+            + hex_color("#79c0ff", "auralogger server-check")
+            + dim(" when the server pipe should flex too.")
+        )
+        a = pick_aside(INIT_CURTAIN_TONY_ASIDES)
+        print_aside(a["emoji"], a["line"])
     print("")
     maybe_print_generic_spice()

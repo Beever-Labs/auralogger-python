@@ -77,7 +77,7 @@ def resolve_project_context_for_cli_checks() -> CliProjectContext:
 
     project_id_raw = auth.get("project_id")
     project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
-    project_name_raw = auth.get("project_name")
+    project_name_raw = auth.get("name") or auth.get("project_name")
     project_name = project_name_raw.strip() if isinstance(project_name_raw, str) else ""
     session_raw = auth.get("session")
     session = session_raw.strip() if isinstance(session_raw, str) else ""

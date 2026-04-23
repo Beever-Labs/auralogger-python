@@ -46,12 +46,12 @@ def format_get_logs_help() -> str:
             "  -<field> [--<op>] <json-value-token>",
             "",
             "Value rules:",
-            "  - maxcount, skip: JSON number (e.g. 50)",
+            "  - maxcount, nextpage: JSON number (e.g. 50)",
             "  - everything else: JSON array (e.g. [\"error\",\"warn\"])",
             "",
             "Examples:",
             "  auralogger get-logs -type '[\"error\",\"warn\"]' -maxcount 50",
-            "  auralogger get-logs -message '[\"timeout\"]' -skip 20 -maxcount 30",
+            "  auralogger get-logs -message '[\"timeout\"]' -nextpage 18423 -maxcount 30",
             "  auralogger get-logs -type --not-in '[\"info\",\"debug\"]' -time --since '[\"10m\"]'",
             '  auralogger get-logs -data.userId \'["06431f39-55e2-4289-80c8-5d0340a8b66e"]\'',
         ]
@@ -142,7 +142,7 @@ def run_get_logs_core(
         print(
             yellow("👻 ")
             + white(
-                "Nothing matched — try looser filters, smaller -skip, or bigger -maxcount; "
+                "Nothing matched — try looser filters or bigger -maxcount; "
                 "if it's a new project, maybe nothing's logged yet."
             )
         )
@@ -161,6 +161,13 @@ def run_get_logs_core(
             t["emoji"],
             format_aside_template(t["line"], {"n": printed}),
         )
+        nextpage = body.get("nextpage")
+        if isinstance(nextpage, int):
+            print(
+                dim("📄 ")
+                + white("More results: ")
+                + bold_hex("#79c0ff", f"auralogger get-logs -nextpage {nextpage}")
+            )
 
 
 def run_get_logs(argv: List[str]) -> None:
@@ -187,10 +194,11 @@ def run_get_logs(argv: List[str]) -> None:
         print(dim("🔐 ") + white("Authenticating with Auralogger…"))
         try:
             raw = fetch_proj_auth_payload(project_token)
-            enc = raw.get("encrypted")
-            if not isinstance(enc, bool):
-                enc = raw.get("encryption")
-            if enc if isinstance(enc, bool) else True:
+            enc_raw = raw.get("encrypted")
+            if enc_raw is None:
+                enc_raw = raw.get("encryption")
+            encrypted = enc_raw is True or enc_raw == "true" if enc_raw is not None else True
+            if encrypted:
                 user_secret = resolve_user_secret_for_init()
             if config_styles is None:
                 styles_raw = raw.get("styles")

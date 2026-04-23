@@ -535,8 +535,7 @@ SERVER_CHECK_OPEN_ASIDES: List[AsideEntry] = [
     {
         "emoji": "🦾",
         "line": (
-            "Tony: Pinging server socket — secret in Authorization, token in path. Relax "
-            "unless it times out."
+            "Tony: Opening the pipe—secret stays server-side, token rides the URL, don't panic unless it stalls."
         ),
     },
     {
@@ -575,7 +574,7 @@ SERVER_CHECK_FAIL_WOLVERINE_ASIDES: List[AsideEntry] = [
 CHECK_RETRY_ASIDES: List[AsideEntry] = [
     {
         "emoji": "🦾",
-        "line": "Tony: Transient failures happen. Retry before we start dramatic monologues.",
+        "line": "Tony: Glitches happen—hit retry before the speeches.",
     },
     {
         "emoji": "💀",
@@ -585,6 +584,24 @@ CHECK_RETRY_ASIDES: List[AsideEntry] = [
         "emoji": "🐺",
         "line": "Wolverine: Breathe. Retry. Then decide what's broken.",
     },
+]
+
+CLIENT_CHECK_START_PETER_ASIDES: List[AsideEntry] = [
+    {
+        "emoji": "🕷️",
+        "line": "Peter: This is how browsers talk. No secret. Just the token. Simple, safe, done.",
+    },
+    {
+        "emoji": "🕷️",
+        "line": (
+            "Peter: Browser tunnel—token in the URL, no Bearer, just like a real tab."
+        ),
+    },
+]
+
+CLIENT_CHECK_SUCCESS_ASIDES: List[AsideEntry] = [
+    {"emoji": "🐺", "line": "Wolverine: It works here. Your app should match it. No excuses."},
+    {"emoji": "💀", "line": "Deadpool: This passed. Your app didn't. That's not a coincidence."},
 ]
 
 TEST_SERVERLOG_START_BANNER_ASIDES: List[AsideEntry] = [

@@ -36,7 +36,6 @@ from auralogger.utils.env_config import (
     get_resolved_project_token,
     get_resolved_session,
     get_resolved_user_secret,
-    is_full_runtime_env_configured,
 )
 
 _KW = "#ff7b72"
@@ -335,12 +334,6 @@ def run_init() -> None:
     if get_command_attempt_count("init") >= 2:
         a = pick_aside(INIT_REPEAT_INTENT_ASIDES)
         print_aside_maybe(a["emoji"], a["line"], 0.12)
-
-    # Fast-path: if token + secret + session are already present, skip proj_auth/prompting.
-    if is_full_runtime_env_configured():
-        print_already_configured_success(True)
-        maybe_print_generic_spice()
-        return
 
     has_project_token = get_resolved_project_token() is not None
     project_token_was_in_env = has_project_token

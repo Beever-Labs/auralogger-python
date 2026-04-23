@@ -57,7 +57,7 @@ def parse_command(tokens: List[str]) -> ParsedGetLogsCommand:
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON for field '{field}'") from None
 
-        if field in ("maxcount", "skip"):
+        if field in ("maxcount", "nextpage"):
             if not _is_finite_number(value):
                 raise ValueError(
                     f"Field '{field}' expects a JSON number token (e.g. 50)"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
@@ -58,7 +59,7 @@ _suppress_websocket_client_noise()
 def _encode_path_token(project_token: str) -> str:
     from urllib.parse import quote
 
-    return quote(project_token.strip(), safe="-_.!~*'()")
+    return quote(project_token.strip(), safe="")
 
 
 def _build_ws_url(project_token: str) -> str:
@@ -68,9 +69,13 @@ def _build_ws_url(project_token: str) -> str:
 
 def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
     enc = raw.get("encrypted")
-    if not isinstance(enc, bool):
+    if enc is None:
         enc = raw.get("encryption")
-    return enc if isinstance(enc, bool) else True
+    if enc is True or enc == "true":
+        return True
+    if enc is False or enc == "false":
+        return False
+    return True
 
 
 def _build_ws_url_no_auth(project_token: str) -> str:
@@ -165,7 +170,7 @@ def _schedule_or_flush_buffer(project_token: str, user_secret: str) -> None:
                 _flush_buffer_now,
                 args=(project_token, user_secret),
             )
-            timer.daemon = True
+            timer.daemon = False
             timer.start()
             global _flush_timer
             _flush_timer = timer
@@ -480,3 +485,6 @@ class auralogger:
     def close_socket(timeout_ms: int = 1000) -> None:
         _ = timeout_ms
         close_aura_log_socket()
+
+
+atexit.register(close_aura_log_socket)

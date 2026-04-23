@@ -29,16 +29,20 @@ from auralogger.cli.cli_personality_state import (
 )
 from auralogger.cli.cli_style import bold, bold_hex, dim, hex_color, red, red_bold, white
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
+from auralogger.cli.commands.client_check import run_client_check
 from auralogger.cli.commands.get_logs_cmd import run_get_logs_command
 from auralogger.cli.commands.init import run_init
 from auralogger.cli.commands.server_check import run_server_check
 from auralogger.cli.commands.test_serverlog import run_test_serverlog
+from auralogger.cli.commands.test_log import run_test_log
 
 KNOWN_COMMANDS = {
     "init",
     "get-logs",
     "server-check",
     "test-serverlog",
+    "client-check",
+    "test-log",
 }
 
 
@@ -57,7 +61,15 @@ def print_usage(stream: TextIO = sys.stdout) -> None:
         file=stream,
     )
     print(
+        hex_color("#7ee787", "  client-check") + dim("    verify the browser-style log tunnel"),
+        file=stream,
+    )
+    print(
         hex_color("#7ee787", "  test-serverlog") + dim("  five fake server logs, just for kicks"),
+        file=stream,
+    )
+    print(
+        hex_color("#7ee787", "  test-log") + dim("       five logs via the index client (no-auth route)"),
         file=stream,
     )
     print(
@@ -129,6 +141,16 @@ def main() -> None:
 
     if command == "test-serverlog":
         run_test_serverlog()
+        record_cli_success(command)
+        return
+
+    if command == "client-check":
+        run_client_check()
+        record_cli_success(command)
+        return
+
+    if command == "test-log":
+        run_test_log()
         record_cli_success(command)
         return
 

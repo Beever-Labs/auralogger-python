@@ -14,7 +14,7 @@ ApiLogFilter = Dict[str, Any]
 def _default_op_for_field(field: str) -> str:
     if field.startswith("data."):
         return "eq"
-    if field in ("order", "maxcount", "skip", "session"):
+    if field in ("order", "maxcount", "nextpage", "session"):
         return "eq"
     if field == "message":
         return "contains"
@@ -38,7 +38,7 @@ def _allowed_ops_for_field(field: str) -> List[str]:
         return ["in", "not-in"]
     if field == "time":
         return ["since", "from-to"]
-    if field in ("order", "maxcount", "skip", "session"):
+    if field in ("order", "maxcount", "nextpage", "session"):
         return ["eq"]
     return []
 
@@ -64,9 +64,9 @@ def normalize_and_validate_filters(parsed: List[ParsedFilter]) -> List[Dict[str,
                 pass
             else:
                 value = min(max(0, int(math.floor(float(value)))), MAX_MAXCOUNT)
-        if filt.field == "skip" and isinstance(value, (int, float)):
+        if filt.field == "nextpage" and isinstance(value, (int, float)):
             if not (isinstance(value, float) and not math.isfinite(value)):
-                value = max(0, int(math.floor(float(value))))
+                value = int(math.floor(float(value)))
 
         api: Dict[str, Any] = {"field": filt.field, "value": value}
         if resolved_op != default_op:

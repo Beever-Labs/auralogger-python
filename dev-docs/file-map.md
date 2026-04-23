@@ -3,7 +3,7 @@
 Use this as a "where to edit" guide.
 
 - `auralogger/__init__.py`
-  - Public API barrel re-exporting programmatic command runners, `fetch_proj_auth_payload`, `fetch_proj_auth_config`, the `auralogger` logger class, and URL builders for embedders/tests
+  - Public API barrel re-exporting programmatic command runners, `fetch_proj_auth_payload`, `fetch_proj_auth_config`, the `Auralogger` logger class, and URL builders for embedders/tests
 
 ## Node → Python naming map
 
@@ -37,7 +37,7 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 
 - `auralogger/commands/test_serverlog.py`
   - `auralogger test-serverlog`
-  - Resolves token + secret (env/prompt), syncs runtime via `auralogger.sync_from_secret(...)`, sends 5 logs via `aura_log(...)`, then closes the cached socket
+  - Resolves token + secret (env/prompt), syncs runtime via `Auralogger.sync_from_secret(...)`, sends 5 logs via `aura_log(...)`, then closes the cached socket
 
 - `auralogger/commands/get_logs_cmd.py`
   - Thin wrapper → `get_logs.run_get_logs`

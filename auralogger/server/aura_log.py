@@ -394,7 +394,7 @@ def aura_log(
     _enqueue_payload_for_send(project_token, user_secret or "", send_payload)
 
 
-class auralogger:
+class Auralogger:
     """Logger wrapper over ``aura_log`` runtime behavior (configure, sync, log, close socket)."""
 
     @staticmethod
@@ -429,11 +429,19 @@ class auralogger:
             else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
         )
         if not resolved_project_token:
-            auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
+            Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
             return
-        raw = fetch_proj_auth_payload(resolved_project_token)
+        try:
+            raw = fetch_proj_auth_payload(resolved_project_token)
+        except ValueError as e:
+            print(
+                f"auralogger: proj_auth failed during configure ({e}); local-only logging.",
+                file=sys.stderr,
+            )
+            Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
+            return
         enc = _read_encrypted_flag(raw)
-        auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret, enc)
+        Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret, enc)
         if enc and not resolved_user_secret:
             return
         project_id_raw = raw.get("project_id")
@@ -441,9 +449,11 @@ class auralogger:
         project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
         session = session_raw.strip() if isinstance(session_raw, str) else ""
         if not project_id or not session:
-            raise ValueError(
-                "auralogger.configure: proj_auth response missing project id or session."
+            print(
+                "auralogger: proj_auth response missing project id/session; local-only logging.",
+                file=sys.stderr,
             )
+            return
         with _hydrate_lock:
             global _hydration_cache_token, _hydration_cache_raw
             _hydration_cache_token = resolved_project_token
@@ -453,8 +463,19 @@ class auralogger:
     def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
         trimmed = project_token.strip()
         if not trimmed:
-            raise ValueError("auralogger.sync_from_secret: project token cannot be empty.")
-        raw = fetch_proj_auth_payload(trimmed)
+            print(
+                "auralogger: sync_from_secret called with empty project token; local-only logging.",
+                file=sys.stderr,
+            )
+            return
+        try:
+            raw = fetch_proj_auth_payload(trimmed)
+        except ValueError as e:
+            print(
+                f"auralogger: proj_auth failed during sync_from_secret ({e}); local-only logging.",
+                file=sys.stderr,
+            )
+            return
         enc = _read_encrypted_flag(raw)
         resolved_user_secret = (
             user_secret.strip()
@@ -462,16 +483,22 @@ class auralogger:
             else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
         )
         if enc and not resolved_user_secret:
-            raise RuntimeError("Missing AURALOGGER_USER_SECRET")
-        auralogger._apply_runtime_config(trimmed, resolved_user_secret, enc)
+            print(
+                "auralogger: Missing AURALOGGER_USER_SECRET for encrypted project; local-only logging.",
+                file=sys.stderr,
+            )
+            return
+        Auralogger._apply_runtime_config(trimmed, resolved_user_secret, enc)
         project_id_raw = raw.get("project_id")
         session_raw = raw.get("session")
         project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
         session = session_raw.strip() if isinstance(session_raw, str) else ""
         if not project_id or not session:
-            raise ValueError(
-                "auralogger.sync_from_secret: proj_auth response missing project id or session."
+            print(
+                "auralogger: proj_auth response missing project id/session; local-only logging.",
+                file=sys.stderr,
             )
+            return
         with _hydrate_lock:
             global _hydration_cache_token, _hydration_cache_raw
             _hydration_cache_token = trimmed

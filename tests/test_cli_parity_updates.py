@@ -100,7 +100,7 @@ class InitParityTests(unittest.TestCase):
         fetch_proj_auth.assert_not_called()
         rendered = output.getvalue()
         self.assertIn("already has token", rendered)
-        self.assertIn("auralogger.configure()", rendered)
+        self.assertIn("Auralogger.configure", rendered)
 
     def test_run_init_normal_path_prints_integration_help(self) -> None:
         output = io.StringIO()
@@ -124,7 +124,7 @@ class InitParityTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Copy-paste env block", rendered)
-        self.assertIn("auralogger — configure and log", rendered)
+        self.assertIn("Auralogger — configure and log", rendered)
 
 
 if __name__ == "__main__":

@@ -109,7 +109,7 @@ auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
 
 ## `auralogger test-serverlog`
 
-**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET` values, runs `auralogger.sync_from_secret(...)` once, then sends 5 logs via `aura_log(...)`, waits briefly, and closes the cached socket.
+**Credentials:** prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET` values, runs `Auralogger.sync_from_secret(...)` once, then sends 5 logs via `aura_log(...)`, waits briefly, and closes the cached socket.
 
 ```bash
 auralogger test-serverlog

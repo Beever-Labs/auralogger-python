@@ -59,11 +59,12 @@ Run `auralogger init` once and paste the printed module, or follow the shapes be
 ```py
 import os
 from typing import Any, Dict, Literal, Optional
-from auralogger import auralogger
+from auralogger import Auralogger
 
 def ensureConfigured() -> None:
     project_token = os.environ.get("AURALOGGER_PROJECT_TOKEN", "").strip()
-    auralogger.configure(project_token)
+    # Silent opt-out: empty token keeps local-only logging.
+    Auralogger.configure(project_token)
 
 def auralog(
     type: Literal["debug", "info", "warn", "error"],
@@ -72,7 +73,7 @@ def auralog(
     data: Optional[Dict[str, Any]] = None,
 ) -> None:
     ensureConfigured()
-    auralogger.log(type, message, location, data)
+    Auralogger.log(type, message, location, data)
 ```
 
 #### Encrypted projects: token + user secret
@@ -80,13 +81,14 @@ def auralog(
 ```py
 import os
 from typing import Any, Dict, Literal, Optional
-from auralogger import auralogger
+from auralogger import Auralogger
 
 def ensureConfigured() -> None:
     project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()
     user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()
-    auralogger.configure(project_token, user_secret)
-    # auralogger.configure()  — omit credentials to print locally only (no streaming for removing network delay and cost).
+    # Silent opt-out: missing creds keep local-only logging.
+    Auralogger.configure(project_token, user_secret)
+    # Auralogger.configure()  — omit credentials to print locally only (no streaming for removing network delay and cost).
    
 
 def auralog(
@@ -96,7 +98,7 @@ def auralog(
     data: Optional[Dict[str, Any]] = None,
 ) -> None:
     ensureConfigured()
-    auralogger.log(
+    Auralogger.log(
         type,
         message,
         location,

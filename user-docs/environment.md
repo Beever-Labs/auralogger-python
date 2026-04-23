@@ -26,7 +26,7 @@
 |---------|------------------|
 | **`auralogger init`** | Loads `.env` / `.env.local` first. Optional: `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` in env to skip prompts. |
 | **`auralogger server-check`** | Prompts for missing token/secret when needed, then sends a single **server-side** test log to verify connectivity. |
-| **`auralogger test-serverlog`** | Prompts for missing token/secret, runs `auralogger.sync_from_secret(...)`, sends 5 logs, then closes the cached socket. |
+| **`auralogger test-serverlog`** | Prompts for missing token/secret, runs `Auralogger.sync_from_secret(...)`, sends 5 logs, then closes the cached socket. |
 | **`auralogger get-logs`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; styles from env or fetched once via `proj_auth` for that run. |
 | **`aura_log()`** | `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`; id/session/styles from env or from a cached `proj_auth` fetch. Otherwise console-only with a one-time stderr hint. |
 

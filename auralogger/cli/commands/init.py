@@ -33,6 +33,7 @@ from auralogger.utils.env_config import (
     ENV_PROJECT_TOKEN,
     ENV_USER_SECRET,
     format_dotenv_line,
+    is_full_runtime_env_configured,
     get_resolved_project_token,
     get_resolved_session,
     get_resolved_user_secret,
@@ -172,7 +173,7 @@ def _build_server_integration_snippet() -> str:
         [
             "import os",
             "from typing import Any, Dict, Literal, Optional",
-            "from auralogger import auralogger",
+            "from auralogger import Auralogger",
             "",
             "_configured = False",
             "",
@@ -182,8 +183,8 @@ def _build_server_integration_snippet() -> str:
             "        return",
             "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
             "    user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()",
-            "    # auralogger.configure()  — omit credentials to print locally only (no streaming).",
-            "    auralogger.configure(project_token, user_secret)",
+            "    # Silent opt-out: missing creds keep local-only logging (no streaming).",
+            "    Auralogger.configure(project_token, user_secret)",
             "    _configured = True",
             "",
             "def auralog(",
@@ -193,7 +194,7 @@ def _build_server_integration_snippet() -> str:
             "    data: Optional[Dict[str, Any]] = None,",
             ") -> None:",
             "    ensureConfigured()",
-            "    auralogger.log(type, message, location, data)",
+            "    Auralogger.log(type, message, location, data)",
         ]
     )
 
@@ -225,7 +226,7 @@ def _build_no_encrypt_integration_snippet() -> str:
         [
             "import os",
             "from typing import Any, Dict, Literal, Optional",
-            "from auralogger import auralogger",
+            "from auralogger import Auralogger",
             "",
             "_configured = False",
             "",
@@ -235,7 +236,7 @@ def _build_no_encrypt_integration_snippet() -> str:
             "        return",
             "    project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()",
             "    # No user secret needed — encryption is disabled for this project.",
-            "    auralogger.configure(project_token)",
+            "    Auralogger.configure(project_token)",
             "    _configured = True",
             "",
             "def auralog(",
@@ -245,7 +246,7 @@ def _build_no_encrypt_integration_snippet() -> str:
             "    data: Optional[Dict[str, Any]] = None,",
             ") -> None:",
             "    ensureConfigured()",
-            "    auralogger.log(type, message, location, data)",
+            "    Auralogger.log(type, message, location, data)",
         ]
     )
 
@@ -253,7 +254,7 @@ def _build_no_encrypt_integration_snippet() -> str:
 def print_init_helper_snippets(encrypted: bool = True) -> None:
     if encrypted:
         _print_python_code_story(
-            "auralogger — configure and log",
+            "Auralogger — configure and log",
             _build_server_integration_snippet(),
         )
         _print_python_code_story(
@@ -262,7 +263,7 @@ def print_init_helper_snippets(encrypted: bool = True) -> None:
         )
     else:
         _print_python_code_story(
-            "auralogger — centralized logger, no encryption (token only)",
+            "Auralogger — centralized logger, no encryption (token only)",
             _build_no_encrypt_integration_snippet(),
         )
         _print_python_code_story(
@@ -334,6 +335,12 @@ def run_init() -> None:
     if get_command_attempt_count("init") >= 2:
         a = pick_aside(INIT_REPEAT_INTENT_ASIDES)
         print_aside_maybe(a["emoji"], a["line"], 0.12)
+
+    # Fast-path: token + secret + session already present → skip proj_auth + prompts.
+    if is_full_runtime_env_configured():
+        print_already_configured_success(True)
+        maybe_print_generic_spice()
+        return
 
     has_project_token = get_resolved_project_token() is not None
     project_token_was_in_env = has_project_token

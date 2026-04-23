@@ -24,7 +24,7 @@ Node parity reference: `node/dev-docs/feature-flows.md` — both packages implem
 9. [Flow: `aura_log` / `auralogger.log` — core logging path](#flow-aura_log--auraloggerlog)
 10. [Batch / flush subsystem](#batch--flush-subsystem)
 11. [WebSocket connection management (`_ensure_ws`)](#websocket-connection-management)
-12. [Class: `auralogger` (configure / sync / log / close)](#class-auralogger)
+12. [Class: `Auralogger` (configure / sync / log / close)](#class-auralogger)
 13. [Cross-cutting: `encrypted` flag, retry, thread safety](#cross-cutting)
 14. [When you add a command](#when-you-add-a-command)
 15. [Quick reference — optimisation checklist](#quick-reference--optimisation-checklist)
@@ -163,7 +163,7 @@ def ensure_utf8_stdio() -> None:
     # Prevents UnicodeEncodeError for emoji output on legacy Windows code pages
 ```
 
-The **runtime logger** (`aura_log` / `auralogger.log`) does **not** call `load_cli_env_files` — library code must not mutate environment on import. Credentials must be injected via `auralogger.configure()` or already be in `os.environ` when `aura_log()` is called.
+The **runtime logger** (`aura_log` / `Auralogger.log`) does **not** call `load_cli_env_files` — library code must not mutate environment on import. Credentials must be injected via `Auralogger.configure()` or already be in `os.environ` when `aura_log()` is called.
 
 ---
 
@@ -256,7 +256,7 @@ def fetch_proj_auth_payload(project_token: str) -> Dict[str, Any]:
 
 `fetch_proj_auth_config` is an alias for Node-parity naming. Both names are in the public API.
 
-**Used by:** `cli_auth.resolve_project_context_for_cli_checks`, `commands/init.run_init`, `aura_log._fetch_proj_auth_cached`, `auralogger.configure`, `auralogger.sync_from_secret`.
+**Used by:** `cli_auth.resolve_project_context_for_cli_checks`, `commands/init.run_init`, `aura_log._fetch_proj_auth_cached`, `Auralogger.configure`, `Auralogger.sync_from_secret`.
 
 ### HTTP error extraction — `utils/http_utils.py`
 
@@ -651,7 +651,7 @@ def run_test_serverlog() -> None:
     project_token = resolve_project_token_for_init()   # env or prompt
     user_secret   = resolve_user_secret_for_init()     # env or prompt
 
-    auralogger.sync_from_secret(project_token, user_secret)
+    Auralogger.sync_from_secret(project_token, user_secret)
     # sync_from_secret():
     #   raw = fetch_proj_auth_payload(project_token)    → POST proj_auth
     #   enc = _read_encrypted_flag(raw)                → bool
@@ -677,7 +677,7 @@ def run_test_serverlog() -> None:
 
 ---
 
-## Flow: `aura_log` / `auralogger.log`
+## Flow: `aura_log` / `Auralogger.log`
 
 This is the **core logging path** — every call from application code runs through here.
 
@@ -1000,11 +1000,11 @@ def close_aura_log_socket() -> None:
 
 ---
 
-## Class: `auralogger`
+## Class: `Auralogger`
 
 Static-method wrapper over module-level state in `aura_log.py`. All persistent state is module-global; the class just groups the public API surface.
 
-### `auralogger.configure`
+### `Auralogger.configure`
 
 ```python
 @staticmethod
@@ -1031,20 +1031,20 @@ def configure(project_token=None, user_secret=None) -> None:
     project_id = (raw.get("project_id") or "").strip()
     session    = (raw.get("session") or "").strip()
     if not project_id or not session:
-        raise ValueError("auralogger.configure: proj_auth response missing project id or session.")
+        # No blocking errors: on invalid/missing fields the SDK opts into local-only logging.
     with _hydrate_lock:
         _hydration_cache_token = resolved_token
         _hydration_cache_raw   = raw
 ```
 
-### `auralogger.sync_from_secret`
+### `Auralogger.sync_from_secret`
 
 ```python
 @staticmethod
 def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
     trimmed = project_token.strip()
     if not trimmed:
-        raise ValueError("auralogger.sync_from_secret: project token cannot be empty.")
+        # No blocking errors: empty token opts into local-only logging.
 
     raw = fetch_proj_auth_payload(trimmed)    # blocking HTTP
     enc = _read_encrypted_flag(raw)
@@ -1058,7 +1058,7 @@ def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> N
     project_id = (raw.get("project_id") or "").strip()
     session    = (raw.get("session") or "").strip()
     if not project_id or not session:
-        raise ValueError("auralogger.sync_from_secret: proj_auth response missing project id or session.")
+        # No blocking errors: missing fields opts into local-only logging.
 
     with _hydrate_lock:
         _hydration_cache_token = trimmed
@@ -1086,7 +1086,7 @@ def _apply_runtime_config(project_token, user_secret, enc=True) -> None:
         _hydration_cache_raw   = None
 ```
 
-### `auralogger.log` and `auralogger.close_socket`
+### `Auralogger.log` and `Auralogger.close_socket`
 
 ```python
 @staticmethod

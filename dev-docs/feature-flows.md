@@ -451,6 +451,8 @@ def run_get_logs(argv: List[str]) -> None:
         print_aside_maybe(GET_LOGS_SKIPPED_SETUP_INTENT_ASIDES, 0.12)
 
     print("📜 get-logs — opening the archive…")
+    a = pick_aside(GET_LOGS_OPEN_ASIDES)
+    print_aside_maybe(a["emoji"], a["line"], 0.12)
     project_token = resolve_project_token_for_init()
     # → env or input() prompt
 ```
@@ -469,8 +471,7 @@ def run_get_logs(argv: List[str]) -> None:
         print("🔐 Authenticating with Auralogger…")
         try:
             raw = fetch_proj_auth_payload(project_token)
-            enc_raw = raw.get("encrypted") or raw.get("encryption")
-            encrypted = (enc_raw is True or enc_raw == "true") if enc_raw is not None else True
+            encrypted = raw.get("encrypted")
             if encrypted:
                 user_secret = resolve_user_secret_for_init()   # env or prompt
             if config_styles is None:
@@ -498,7 +499,10 @@ If `proj_auth` fails, `get-logs` still proceeds — uses default terminal colour
     #   scan for -field [--op] <json-token> triples
     #   return ParsedCommand(filters=[ParsedFilter(field, op, value)])
 
-    filters = normalize_and_validate_filters(parsed.filters)
+    filters = with_default_session_filter(
+        normalize_and_validate_filters(parsed.filters),
+        get_resolved_session(),
+    )
     # get_logs_filters.py:
     #   for each filter:
     #     default_op = defaultOpForField(field)  e.g. "type"→"in", "time"→"since"
@@ -526,7 +530,7 @@ def _post_logs(base_url, project_token, user_secret, filters):
             raw = resp.read()
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print("⚠️ POST /api/{token}/logs returned 404 — check AURALOGGER_API_URL.")
+            print("⚠️ POST /api/{token}/logs returned 404 — wrong API host, old backend, or route not deployed. Check AURALOGGER_API_URL.")
             return {"logs": []}, True      # soft-fail: empty result, no traceback
         # non-404 HTTP error → parse_error_body + raise ValueError
         # 401/403 → append ENV_RECOVERY_HINT_PLAIN
@@ -542,6 +546,7 @@ def _post_logs(base_url, project_token, user_secret, filters):
 ### Rendering loop
 
 ```python
+    print("📦 Fetching logs…")
     logs = body.get("logs") if isinstance(body.get("logs"), list) else []
     if len(logs) == 0:
         if not logs_endpoint_not_found:

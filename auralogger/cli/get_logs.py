@@ -21,13 +21,14 @@ from auralogger.cli.cli_load_env import ensure_utf8_stdio
 from auralogger.cli.cli_personality_state import get_successful_run_count
 from auralogger.cli.cli_style import bold_hex, cyan, dim, white, yellow
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
-from auralogger.cli.get_logs_filters import normalize_and_validate_filters
+from auralogger.cli.get_logs_filters import normalize_and_validate_filters, with_default_session_filter
 from auralogger.cli.log_print import print_log
 from auralogger.cli.log_styles import build_style_entries_from_api
 from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.backend_origin import build_project_logs_url, resolve_api_base_url
 from auralogger.utils.env_config import (
     get_resolved_project_token,
+    get_resolved_session,
     get_resolved_user_secret,
     try_parse_resolved_styles,
 )
@@ -126,7 +127,10 @@ def run_get_logs_core(
 ) -> None:
     try:
         parsed = parse_command(argv)
-        filters = normalize_and_validate_filters(parsed.filters)
+        filters = with_default_session_filter(
+            normalize_and_validate_filters(parsed.filters),
+            get_resolved_session(),
+        )
     except Exception as e:
         msg = str(e)
         raise ValueError(f"{msg}\n\n{format_get_logs_help()}") from e
@@ -194,10 +198,7 @@ def run_get_logs(argv: List[str]) -> None:
         print(dim("🔐 ") + white("Authenticating with Auralogger…"))
         try:
             raw = fetch_proj_auth_payload(project_token)
-            enc_raw = raw.get("encrypted")
-            if enc_raw is None:
-                enc_raw = raw.get("encryption")
-            encrypted = enc_raw is True or enc_raw == "true" if enc_raw is not None else True
+            encrypted = raw.get("encrypted")
             if encrypted:
                 user_secret = resolve_user_secret_for_init()
             if config_styles is None:

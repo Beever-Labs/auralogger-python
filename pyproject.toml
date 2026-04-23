@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auralogger"
-version = "0.1.4"
+version = "0.1.5"
 description = "Open-Source Developer package repository for AuraLogger, a real-time logging and observability SDK and CLI for streaming, storing, searching, and filtering application logs—beautifully visualized and accessible anywhere in the world across terminal, web, and any screen."
 readme = "README.md"
 license = "ISC"

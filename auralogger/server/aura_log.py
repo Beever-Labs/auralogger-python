@@ -1,16 +1,24 @@
-"""Runtime log helper: styled console line + optional WebSocket send (mirrors node aura-log / server-log)."""
+"""Runtime log helper: styled console line + optional WebSocket send.
+
+Parity with node ``AuraClient`` / ``AuraServer``:
+    1. print_log immediately
+    2. if no project_token (from configure) → return
+    3. proj_auth hydrates project_id + session + styles (+ encrypted flag)
+    4. open ws if not yet (Bearer for encrypted, no auth for non-encrypted)
+    5. push log into batch; start flush timer if batch was empty, or flush if batch is full
+"""
 
 from __future__ import annotations
 
 import atexit
 import json
 import logging
-import os
 import sys
 import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import websocket
 from websocket import create_connection
@@ -21,50 +29,66 @@ from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.backend_origin import resolve_ws_base_url
 from auralogger.utils.env_config import (
     get_resolved_project_token,
-    get_resolved_session,
     get_resolved_user_secret,
-    try_parse_resolved_styles,
 )
 
 UNKNOWN_TYPE = "unknown"
+LOCAL_FALLBACK_SESSION = "auralogger-local-session"
 CONNECT_TIMEOUT_S = 5
-SDK_RETRY_ATTEMPTS = 3
-SDK_RETRY_DELAY_S = 0.5
 BATCH_FLUSH_INTERVAL_S = 0.03
 BATCH_MAX_SIZE = 30
 
-_ws: Optional[Any] = None
-_bound_url: Optional[str] = None
-_local_session_id: Optional[str] = None
-
-_hydrate_lock = threading.Lock()
-_hydration_cache_token: Optional[str] = None
-_hydration_cache_raw: Optional[Dict[str, Any]] = None
-_override_project_token: Optional[str] = None
-_override_user_secret: Optional[str] = None
-_encrypted: bool = True
-_send_buffer_lock = threading.Lock()
-_send_buffer: list[Dict[str, Any]] = []
-_flush_timer: Optional[threading.Timer] = None
-
 
 def _suppress_websocket_client_noise() -> None:
-    """Hide websocket-client connection/debug logs unless app explicitly overrides."""
     logging.getLogger("websocket").setLevel(logging.WARNING)
 
 
 _suppress_websocket_client_noise()
 
 
-def _encode_path_token(project_token: str) -> str:
-    from urllib.parse import quote
+# ---- state ----------------------------------------------------------------
 
+_state_lock = threading.Lock()
+
+_project_token: Optional[str] = None
+_user_secret: Optional[str] = None
+# True = encrypted flow (Bearer header, /create_log)
+# False = non-encrypted flow (no auth, /create_browser_logs)
+_encrypted: bool = True
+
+_session: Optional[str] = None
+_styles: Optional[Any] = None
+
+_proj_auth_event = threading.Event()
+_proj_auth_started: bool = False
+_proj_auth_ok: bool = False
+
+_ws: Optional[Any] = None
+_bound_url: Optional[str] = None
+
+_batch: list[Dict[str, Any]] = []
+_flush_timer: Optional[threading.Timer] = None
+_flush_in_flight: bool = False
+
+_local_session_id: Optional[str] = None
+_auto_init_attempted: bool = False
+_warned_missing_user_secret: bool = False
+_send_given_up: bool = False
+
+
+# ---- small helpers --------------------------------------------------------
+
+
+def _encode_path_token(project_token: str) -> str:
     return quote(project_token.strip(), safe="")
 
 
-def _build_ws_url(project_token: str) -> str:
-    encoded = _encode_path_token(project_token)
-    return f"{resolve_ws_base_url()}/{encoded}/create_log"
+def _build_ws_url_encrypted(project_token: str) -> str:
+    return f"{resolve_ws_base_url()}/{_encode_path_token(project_token)}/create_log"
+
+
+def _build_ws_url_open(project_token: str) -> str:
+    return f"{resolve_ws_base_url()}/{_encode_path_token(project_token)}/create_browser_logs"
 
 
 def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
@@ -76,15 +100,6 @@ def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
     if enc is False or enc == "false":
         return False
     return True
-
-
-def _build_ws_url_no_auth(project_token: str) -> str:
-    encoded = _encode_path_token(project_token)
-    return f"{resolve_ws_base_url()}/{encoded}/create_browser_logs"
-
-
-def _is_plain_object(value: Any) -> bool:
-    return isinstance(value, dict)
 
 
 def _normalize_type(raw: str) -> str:
@@ -104,7 +119,7 @@ def _maybe_data(data: Any) -> Optional[str]:
         return None
     if isinstance(data, str):
         return data
-    if _is_plain_object(data):
+    if isinstance(data, dict):
         try:
             return json.dumps(data)
         except (TypeError, ValueError):
@@ -112,13 +127,10 @@ def _maybe_data(data: Any) -> Optional[str]:
     return None
 
 
-def _iso_timestamp_utc(dt: Optional[datetime] = None) -> str:
-    now = dt or datetime.now(timezone.utc)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+def _iso_timestamp_utc() -> str:
+    now = datetime.now(timezone.utc)
     base = now.strftime("%Y-%m-%dT%H:%M:%S")
-    micros = f"{now.microsecond:06d}"
-    return f"{base}.{micros}Z"
+    return f"{base}.{now.microsecond:06d}Z"
 
 
 def _get_or_create_local_session() -> str:
@@ -126,6 +138,62 @@ def _get_or_create_local_session() -> str:
     if _local_session_id is None:
         _local_session_id = str(uuid.uuid4())
     return _local_session_id
+
+
+# ---- proj_auth ------------------------------------------------------------
+
+
+def _apply_proj_auth_payload(raw: Dict[str, Any]) -> bool:
+    """Pull session + styles from a proj_auth response. Returns True if usable."""
+    global _session, _styles
+    pid_raw = raw.get("project_id")
+    sess_raw = raw.get("session")
+    pid = pid_raw.strip() if isinstance(pid_raw, str) else ""
+    sess = sess_raw.strip() if isinstance(sess_raw, str) else ""
+    if not pid or not sess:
+        return False
+    rows = raw.get("styles")
+    rows = rows if isinstance(rows, list) else []
+    _session = sess
+    _styles = build_style_entries_from_api(rows)
+    return True
+
+
+def _proj_auth_worker(token: str) -> None:
+    global _proj_auth_ok
+    try:
+        raw = fetch_proj_auth_payload(token)
+    except ValueError as e:
+        print(
+            f"auralogger: proj_auth failed; local-only logging ({e})",
+            file=sys.stderr,
+        )
+        _proj_auth_ok = False
+        _proj_auth_event.set()
+        return
+    if not _apply_proj_auth_payload(raw):
+        print(
+            "auralogger: proj_auth response missing project id or session; local-only logging.",
+            file=sys.stderr,
+        )
+        _proj_auth_ok = False
+    else:
+        _proj_auth_ok = True
+    _proj_auth_event.set()
+
+
+def _start_proj_auth_once() -> None:
+    global _proj_auth_started
+    with _state_lock:
+        if _proj_auth_started or not _project_token:
+            return
+        _proj_auth_started = True
+        token = _project_token
+    t = threading.Thread(target=_proj_auth_worker, args=(token,), daemon=True)
+    t.start()
+
+
+# ---- websocket ------------------------------------------------------------
 
 
 def _close_ws_connection() -> None:
@@ -139,6 +207,58 @@ def _close_ws_connection() -> None:
     _bound_url = None
 
 
+def _open_ws_if_needed() -> Optional[Any]:
+    global _ws, _bound_url, _warned_missing_user_secret
+    if not _project_token:
+        return None
+    if _encrypted and not _user_secret:
+        if not _warned_missing_user_secret:
+            _warned_missing_user_secret = True
+            print(
+                "auralogger: missing user secret. Call Auralogger.configure(project_token, user_secret) before logging.",
+                file=sys.stderr,
+            )
+        return None
+    url = _build_ws_url_encrypted(_project_token) if _encrypted else _build_ws_url_open(_project_token)
+    if _ws is not None and _bound_url == url and getattr(_ws, "connected", False):
+        return _ws
+    _close_ws_connection()
+    headers = [f"Authorization: Bearer {_user_secret}"] if _encrypted else []
+    try:
+        conn = create_connection(url, timeout=CONNECT_TIMEOUT_S, header=headers)
+    except Exception as e:
+        print(f"auralogger: could not open websocket ({e})", file=sys.stderr)
+        return None
+    _ws = conn
+    _bound_url = url
+    return conn
+
+
+def _send_batch(payloads: list[Dict[str, Any]]) -> bool:
+    try:
+        body = json.dumps(payloads)
+    except (TypeError, ValueError) as e:
+        print(f"auralogger: failed to serialize log batch: {e}", file=sys.stderr)
+        return False
+    ws = _open_ws_if_needed()
+    if ws is None:
+        return False
+    try:
+        ws.send(body)
+        return True
+    except websocket.WebSocketTimeoutException as e:
+        print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
+        _close_ws_connection()
+        return False
+    except Exception as e:
+        print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
+        _close_ws_connection()
+        return False
+
+
+# ---- batch / flush --------------------------------------------------------
+
+
 def _cancel_flush_timer_locked() -> None:
     global _flush_timer
     if _flush_timer is not None:
@@ -146,206 +266,126 @@ def _cancel_flush_timer_locked() -> None:
         _flush_timer = None
 
 
-def _flush_buffer_now(project_token: str, user_secret: str) -> None:
-    global _send_buffer
-    with _send_buffer_lock:
-        if not _send_buffer:
-            _cancel_flush_timer_locked()
+def _schedule_flush_locked() -> None:
+    global _flush_timer
+    _cancel_flush_timer_locked()
+    _flush_timer = threading.Timer(BATCH_FLUSH_INTERVAL_S, _flush_now)
+    _flush_timer.daemon = False
+    _flush_timer.start()
+
+
+def _schedule_flush() -> None:
+    with _state_lock:
+        _schedule_flush_locked()
+
+
+def _flush_now() -> None:
+    global _flush_in_flight, _send_given_up
+    with _state_lock:
+        if _flush_in_flight:
             return
-        batch = _send_buffer[:]
-        _send_buffer = []
+        _flush_in_flight = True
         _cancel_flush_timer_locked()
-    _send_payload_async(project_token, user_secret, batch)
+        if _send_given_up:
+            _batch.clear()
+            _flush_in_flight = False
+            return
+    try:
+        if not _proj_auth_started:
+            return
+        _proj_auth_event.wait()
+        if not _proj_auth_ok or not _session:
+            with _state_lock:
+                _batch.clear()
+                _send_given_up = True
+            return
+        live_session = _session
+        while True:
+            with _state_lock:
+                if not _batch:
+                    return
+                slice_ = _batch[:BATCH_MAX_SIZE]
+            for p in slice_:
+                p["session"] = live_session
+            sent = _send_batch(slice_)
+            if not sent:
+                # One attempt, no retry loop. Drop everything and stop until configure() resets.
+                with _state_lock:
+                    _batch.clear()
+                    _send_given_up = True
+                return
+            with _state_lock:
+                del _batch[: len(slice_)]
+    finally:
+        with _state_lock:
+            _flush_in_flight = False
 
 
-def _schedule_or_flush_buffer(project_token: str, user_secret: str) -> None:
-    with _send_buffer_lock:
-        if len(_send_buffer) >= BATCH_MAX_SIZE:
+def _enqueue(payload: Dict[str, Any]) -> None:
+    if _send_given_up:
+        return
+    _start_proj_auth_once()
+    should_flush = False
+    should_schedule = False
+    with _state_lock:
+        if _send_given_up:
+            return
+        was_empty = len(_batch) == 0
+        _batch.append(payload)
+        if len(_batch) >= BATCH_MAX_SIZE:
             should_flush = True
-        else:
-            should_flush = False
-            _cancel_flush_timer_locked()
-            timer = threading.Timer(
-                BATCH_FLUSH_INTERVAL_S,
-                _flush_buffer_now,
-                args=(project_token, user_secret),
-            )
-            timer.daemon = False
-            timer.start()
-            global _flush_timer
-            _flush_timer = timer
+        elif was_empty:
+            should_schedule = True
     if should_flush:
-        _flush_buffer_now(project_token, user_secret)
+        threading.Thread(target=_flush_now, daemon=False).start()
+    elif should_schedule:
+        _schedule_flush()
 
 
-def _enqueue_payload_for_send(project_token: str, user_secret: str, payload: Dict[str, Any]) -> None:
-    with _send_buffer_lock:
-        _send_buffer.append(payload)
-    _schedule_or_flush_buffer(project_token, user_secret)
+# ---- public entry points --------------------------------------------------
+
+
+def _reset_proj_auth_state_locked() -> None:
+    global _session, _styles, _proj_auth_started, _proj_auth_ok, _local_session_id
+    global _warned_missing_user_secret, _send_given_up
+    _session = None
+    _styles = None
+    _proj_auth_started = False
+    _proj_auth_ok = False
+    _local_session_id = None
+    _warned_missing_user_secret = False
+    _send_given_up = False
+    _proj_auth_event.clear()
+
+
+def _reset_batch_state_locked() -> None:
+    global _batch, _flush_in_flight
+    _batch = []
+    _cancel_flush_timer_locked()
+    _flush_in_flight = False
 
 
 def close_aura_log_socket() -> None:
-    """Close the cached WebSocket and drop cached ``proj_auth`` data for this process."""
-    global _hydration_cache_token, _hydration_cache_raw
-    project_token = _resolve_project_token_runtime()
-    user_secret = _resolve_user_secret_runtime() or ""
-    if project_token and (user_secret or not _encrypted):
-        _flush_buffer_now(project_token, user_secret)
-    else:
-        with _send_buffer_lock:
-            global _send_buffer
-            _send_buffer = []
-            _cancel_flush_timer_locked()
+    """Flush any buffered logs, close the cached WebSocket, drop cached state."""
+    if _proj_auth_started and _project_token:
+        _proj_auth_event.wait(timeout=10)
+        _flush_now()
+    with _state_lock:
+        _reset_batch_state_locked()
     _close_ws_connection()
-    _hydration_cache_token = None
-    _hydration_cache_raw = None
 
 
-def _fetch_proj_auth_cached(project_token: str) -> Optional[Dict[str, Any]]:
-    global _hydration_cache_token, _hydration_cache_raw
-    with _hydrate_lock:
-        if _hydration_cache_token == project_token and _hydration_cache_raw is not None:
-            return _hydration_cache_raw
-        raw = None
-        for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
-            try:
-                raw = fetch_proj_auth_payload(project_token)
-                break
-            except ValueError:
-                if attempt >= SDK_RETRY_ATTEMPTS:
-                    return None
-                print(
-                    f"auralogger: proj_auth failed; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
-                    file=sys.stderr,
-                )
-                threading.Event().wait(SDK_RETRY_DELAY_S)
-        if raw is None:
-            return None
-        _hydration_cache_token = project_token
-        _hydration_cache_raw = raw
-        return raw
-
-
-def _resolve_project_token_runtime() -> Optional[str]:
-    if _override_project_token is not None:
-        s = _override_project_token.strip()
-        if s:
-            return s
-    return get_resolved_project_token()
-
-
-def _resolve_user_secret_runtime() -> Optional[str]:
-    if _override_user_secret is not None:
-        s = _override_user_secret.strip()
-        if s:
-            return s
-    return get_resolved_user_secret()
-
-
-def _merged_runtime_for_send(project_token: str) -> Optional[Dict[str, Any]]:
-    from auralogger.utils.env_config import get_resolved_project_id
-
-    pid = (get_resolved_project_id() or "").strip()
-    sess = (get_resolved_session() or "").strip()
-    styles = try_parse_resolved_styles()
-
-    need_fetch = not pid or not sess or styles is None
-
-    if need_fetch:
-        raw = _fetch_proj_auth_cached(project_token)
-        if raw is None:
-            return None
-        if not pid:
-            x = raw.get("project_id")
-            if isinstance(x, str):
-                pid = x.strip()
-            elif x is not None:
-                pid = str(x).strip()
-            else:
-                pid = ""
-        if not sess:
-            x = raw.get("session")
-            sess = x.strip() if isinstance(x, str) else ""
-        if styles is None:
-            rows = raw.get("styles")
-            rows = rows if isinstance(rows, list) else []
-            styles = build_style_entries_from_api(rows)
-
-    if not pid or not sess:
-        return None
-    if styles is None:
-        styles = build_style_entries_from_api([])
-    return {"project_id": pid, "session": sess, "styles": styles}
-
-
-def _ensure_ws(project_token: str, user_secret: str):
-    global _ws, _bound_url
-    url = _build_ws_url_no_auth(project_token) if not _encrypted else _build_ws_url(project_token)
-    if _ws is not None and _bound_url == url and _ws.connected:
-        return _ws
-    _close_ws_connection()
-    headers = [] if not _encrypted else [f"Authorization: Bearer {user_secret}"]
-    conn = create_connection(
-        url,
-        timeout=CONNECT_TIMEOUT_S,
-        header=headers,
-    )
-    _ws = conn
-    _bound_url = url
-    return conn
-
-
-def _styles_for_console(
-    project_token: Optional[str], merged: Optional[Dict[str, Any]]
-) -> Any:
-    s = try_parse_resolved_styles()
-    if s is not None:
-        return s
-    if merged is not None:
-        return merged.get("styles")
-    if project_token:
-        raw = _fetch_proj_auth_cached(project_token)
-        if raw is not None:
-            rows = raw.get("styles")
-            rows = rows if isinstance(rows, list) else []
-            return build_style_entries_from_api(rows)
-    return None
-
-
-def _send_payload_async(
-    project_token: str, user_secret: str, payload_batch: list[Dict[str, Any]]
-) -> None:
-    try:
-        body = json.dumps(payload_batch)
-    except (TypeError, ValueError) as e:
-        print(f"auralogger: failed to serialize log batch payload: {e}", file=sys.stderr)
+def _auto_init_from_env_once() -> None:
+    """Zero-config convenience: on first log without configure(), pull creds from env."""
+    global _auto_init_attempted
+    if _auto_init_attempted or _project_token:
         return
-
-    for attempt in range(1, SDK_RETRY_ATTEMPTS + 1):
-        try:
-            ws = _ensure_ws(project_token, user_secret)
-            ws.send(body)
-            return
-        except websocket.WebSocketTimeoutException as e:
-            close_aura_log_socket()
-            if attempt >= SDK_RETRY_ATTEMPTS:
-                print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
-                return
-            print(
-                f"auralogger: websocket send timeout; retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
-                file=sys.stderr,
-            )
-            threading.Event().wait(SDK_RETRY_DELAY_S)
-        except Exception as e:
-            close_aura_log_socket()
-            if attempt >= SDK_RETRY_ATTEMPTS:
-                print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
-                return
-            print(
-                f"auralogger: websocket send failed ({e}); retrying ({attempt + 1}/{SDK_RETRY_ATTEMPTS})...",
-                file=sys.stderr,
-            )
-            threading.Event().wait(SDK_RETRY_DELAY_S)
+    _auto_init_attempted = True
+    token = get_resolved_project_token() or ""
+    if not token:
+        return
+    secret = get_resolved_user_secret() or ""
+    Auralogger.configure(token, secret)
 
 
 def aura_log(
@@ -354,17 +394,12 @@ def aura_log(
     location: Optional[str] = None,
     data: Any = None,
 ) -> None:
-    """
-    Print a styled log line locally and, when ``AURALOGGER_PROJECT_TOKEN`` and
-    ``AURALOGGER_USER_SECRET`` are available, send the same payload over the logging WebSocket.
-    """
-    project_token = _resolve_project_token_runtime()
-    user_secret = _resolve_user_secret_runtime()
-
+    """Print a styled log line locally and, when configured, queue it for the WebSocket."""
+    _auto_init_from_env_once()
     payload: Dict[str, Any] = {
         "type": _normalize_type(type),
         "message": "" if message is None else str(message),
-        "session": _get_or_create_local_session(),
+        "session": _session or _get_or_create_local_session(),
         "created_at": _iso_timestamp_utc(),
     }
     loc = _normalize_location(location)
@@ -374,28 +409,23 @@ def aura_log(
     if data_str is not None:
         payload["data"] = data_str
 
-    styles = _styles_for_console(project_token, None)
     try:
-        print_log(payload, styles)
+        print_log(payload, _styles if _styles is not None else [])
     except Exception as e:
         print(f"auralogger: failed to print log: {e}", file=sys.stderr)
 
-    if not project_token:
-        return
-    if _encrypted and not user_secret:
+    if not _project_token:
         return
 
-    merged = _merged_runtime_for_send(project_token)
-    if merged is None:
-        return
-
-    send_payload = payload.copy()
-    send_payload["session"] = merged["session"]
-    _enqueue_payload_for_send(project_token, user_secret or "", send_payload)
+    _enqueue(payload)
 
 
 class Auralogger:
-    """Logger wrapper over ``aura_log`` runtime behavior (configure, sync, log, close socket)."""
+    """Logger wrapper: configure, sync, log, close socket.
+
+    Encrypted flow (default): ``configure(project_token, user_secret)``
+    Non-encrypted flow:        ``configure(project_token, enc=False)``
+    """
 
     @staticmethod
     def _apply_runtime_config(
@@ -403,64 +433,68 @@ class Auralogger:
         user_secret: str,
         enc: bool = True,
     ) -> None:
-        global _override_project_token, _override_user_secret, _encrypted
-        global _hydration_cache_token, _hydration_cache_raw, _local_session_id
-        _override_project_token = project_token
-        _override_user_secret = user_secret
-        _encrypted = enc
-        _local_session_id = None
-        with _hydrate_lock:
-            _hydration_cache_token = None
-            _hydration_cache_raw = None
+        global _project_token, _user_secret, _encrypted
+        with _state_lock:
+            _project_token = project_token or None
+            _user_secret = user_secret or None
+            _encrypted = enc
+            _reset_proj_auth_state_locked()
+            _reset_batch_state_locked()
 
     @staticmethod
     def configure(
         project_token: Optional[str] = None,
         user_secret: Optional[str] = None,
+        enc: bool = True,
     ) -> None:
-        resolved_project_token = (
+        # configure-time env fallback is a convenience for zero-arg callers.
+        # The log path itself never reads env — once configured, that's the single source.
+        token = (
             project_token.strip()
             if isinstance(project_token, str)
-            else os.environ.get("AURALOGGER_PROJECT_TOKEN", "").strip()
+            else (get_resolved_project_token() or "")
         )
-        resolved_user_secret = (
+        secret = (
             user_secret.strip()
             if isinstance(user_secret, str)
-            else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
+            else (get_resolved_user_secret() or "")
         )
-        if not resolved_project_token:
-            Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
+        if not token:
+            Auralogger._apply_runtime_config("", "", enc)
+            print(
+                "auralogger: configure called with empty project token; continuing in local-only mode.",
+                file=sys.stderr,
+            )
             return
+        Auralogger._apply_runtime_config(token, secret, enc)
+        # Run proj_auth synchronously so session/styles are ready for the first log.
+        global _proj_auth_started, _proj_auth_ok
         try:
-            raw = fetch_proj_auth_payload(resolved_project_token)
+            raw = fetch_proj_auth_payload(token)
         except ValueError as e:
             print(
                 f"auralogger: proj_auth failed during configure ({e}); local-only logging.",
                 file=sys.stderr,
             )
-            Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret)
+            with _state_lock:
+                _proj_auth_started = True
+                _proj_auth_ok = False
+                _proj_auth_event.set()
             return
-        enc = _read_encrypted_flag(raw)
-        Auralogger._apply_runtime_config(resolved_project_token, resolved_user_secret, enc)
-        if enc and not resolved_user_secret:
-            return
-        project_id_raw = raw.get("project_id")
-        session_raw = raw.get("session")
-        project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
-        session = session_raw.strip() if isinstance(session_raw, str) else ""
-        if not project_id or not session:
+        with _state_lock:
+            ok = _apply_proj_auth_payload(raw)
+            _proj_auth_started = True
+            _proj_auth_ok = ok
+            _proj_auth_event.set()
+        if not ok:
             print(
-                "auralogger: proj_auth response missing project id/session; local-only logging.",
+                "auralogger: proj_auth response missing project id or session; local-only logging.",
                 file=sys.stderr,
             )
-            return
-        with _hydrate_lock:
-            global _hydration_cache_token, _hydration_cache_raw
-            _hydration_cache_token = resolved_project_token
-            _hydration_cache_raw = raw
 
     @staticmethod
     def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
+        """Eagerly run proj_auth. Detects ``encrypted`` flag from the response."""
         trimmed = project_token.strip()
         if not trimmed:
             print(
@@ -477,35 +511,34 @@ class Auralogger:
             )
             return
         enc = _read_encrypted_flag(raw)
-        resolved_user_secret = (
-            user_secret.strip()
-            if isinstance(user_secret, str)
-            else os.environ.get("AURALOGGER_USER_SECRET", "").strip()
-        )
-        if enc and not resolved_user_secret:
+        secret = user_secret.strip() if isinstance(user_secret, str) else ""
+        if enc and not secret:
             print(
-                "auralogger: Missing AURALOGGER_USER_SECRET for encrypted project; local-only logging.",
+                "auralogger: missing user secret for encrypted project; local-only logging.",
                 file=sys.stderr,
             )
             return
-        Auralogger._apply_runtime_config(trimmed, resolved_user_secret, enc)
-        project_id_raw = raw.get("project_id")
-        session_raw = raw.get("session")
-        project_id = project_id_raw.strip() if isinstance(project_id_raw, str) else ""
-        session = session_raw.strip() if isinstance(session_raw, str) else ""
-        if not project_id or not session:
+        Auralogger._apply_runtime_config(trimmed, secret, enc)
+        # Install the already-fetched payload so we don't re-call proj_auth.
+        global _proj_auth_started, _proj_auth_ok
+        with _state_lock:
+            ok = _apply_proj_auth_payload(raw)
+            _proj_auth_started = True
+            _proj_auth_ok = ok
+            _proj_auth_event.set()
+        if not ok:
             print(
-                "auralogger: proj_auth response missing project id/session; local-only logging.",
+                "auralogger: proj_auth response missing project id or session; local-only logging.",
                 file=sys.stderr,
             )
-            return
-        with _hydrate_lock:
-            global _hydration_cache_token, _hydration_cache_raw
-            _hydration_cache_token = trimmed
-            _hydration_cache_raw = raw
 
     @staticmethod
-    def log(type: str, message: str, location: Optional[str] = None, data: Any = None) -> None:
+    def log(
+        type: str,
+        message: str,
+        location: Optional[str] = None,
+        data: Any = None,
+    ) -> None:
         aura_log(type, message, location, data)
 
     @staticmethod

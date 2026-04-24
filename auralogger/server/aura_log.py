@@ -13,12 +13,13 @@ from __future__ import annotations
 import atexit
 import json
 import logging
+import os
 import sys
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import quote
 
 import websocket
 from websocket import create_connection
@@ -37,6 +38,8 @@ LOCAL_FALLBACK_SESSION = "auralogger-local-session"
 CONNECT_TIMEOUT_S = 5
 BATCH_FLUSH_INTERVAL_S = 0.03
 BATCH_MAX_SIZE = 30
+PROJ_AUTH_RETRY_ATTEMPTS = 3
+PROJ_AUTH_RETRY_DELAY_S = 0.5
 
 
 def _suppress_websocket_client_noise() -> None:
@@ -44,6 +47,20 @@ def _suppress_websocket_client_noise() -> None:
 
 
 _suppress_websocket_client_noise()
+
+
+def _is_debug_enabled() -> bool:
+    v = (os.environ.get("AURALOGGER_DEBUG") or "").strip().lower()
+    return bool(v) and v not in ("0", "false", "no", "off")
+
+
+def _trace(event: str, details: Optional[Dict[str, Any]] = None) -> None:
+    if not _is_debug_enabled():
+        return
+    if details:
+        print(f"auralogger: [AuraLog] {event} {details}", file=sys.stderr)
+    else:
+        print(f"auralogger: [AuraLog] {event}", file=sys.stderr)
 
 
 # ---- state ----------------------------------------------------------------
@@ -73,22 +90,17 @@ _flush_in_flight: bool = False
 _local_session_id: Optional[str] = None
 _auto_init_attempted: bool = False
 _warned_missing_user_secret: bool = False
-_send_given_up: bool = False
 
 
 # ---- small helpers --------------------------------------------------------
 
 
-def _encode_path_token(project_token: str) -> str:
-    return quote(project_token.strip(), safe="")
-
-
 def _build_ws_url_encrypted(project_token: str) -> str:
-    return f"{resolve_ws_base_url()}/{_encode_path_token(project_token)}/create_log"
+    return f"{resolve_ws_base_url()}/{project_token.strip()}/create_log"
 
 
 def _build_ws_url_open(project_token: str) -> str:
-    return f"{resolve_ws_base_url()}/{_encode_path_token(project_token)}/create_browser_logs"
+    return f"{resolve_ws_base_url()}/{project_token.strip()}/create_browser_logs"
 
 
 def _read_encrypted_flag(raw: Dict[str, Any]) -> bool:
@@ -160,26 +172,46 @@ def _apply_proj_auth_payload(raw: Dict[str, Any]) -> bool:
 
 
 def _proj_auth_worker(token: str) -> None:
-    global _proj_auth_ok
-    try:
-        raw = fetch_proj_auth_payload(token)
-    except ValueError as e:
+    global _proj_auth_ok, _proj_auth_started
+    _trace("proj_auth.start", {"hasToken": bool(token)})
+    last_err: Optional[BaseException] = None
+    raw: Optional[Dict[str, Any]] = None
+    for attempt in range(1, PROJ_AUTH_RETRY_ATTEMPTS + 1):
+        try:
+            raw = fetch_proj_auth_payload(token)
+            last_err = None
+            break
+        except ValueError as e:
+            last_err = e
+            _trace(
+                "proj_auth.attempt_failed",
+                {"attempt": attempt, "max": PROJ_AUTH_RETRY_ATTEMPTS, "message": str(e)},
+            )
+            if attempt < PROJ_AUTH_RETRY_ATTEMPTS:
+                time.sleep(PROJ_AUTH_RETRY_DELAY_S)
+    if raw is None:
         print(
-            f"auralogger: proj_auth failed; local-only logging ({e})",
+            f"auralogger: proj_auth failed after {PROJ_AUTH_RETRY_ATTEMPTS} attempts; local-only logging ({last_err})",
             file=sys.stderr,
         )
-        _proj_auth_ok = False
-        _proj_auth_event.set()
+        with _state_lock:
+            _proj_auth_ok = False
+            _proj_auth_started = False
+            _proj_auth_event.clear()
         return
     if not _apply_proj_auth_payload(raw):
         print(
             "auralogger: proj_auth response missing project id or session; local-only logging.",
             file=sys.stderr,
         )
-        _proj_auth_ok = False
-    else:
+        with _state_lock:
+            _proj_auth_ok = False
+            _proj_auth_started = False
+            _proj_auth_event.clear()
+        return
+    with _state_lock:
         _proj_auth_ok = True
-    _proj_auth_event.set()
+        _proj_auth_event.set()
 
 
 def _start_proj_auth_once() -> None:
@@ -247,11 +279,29 @@ def _send_batch(payloads: list[Dict[str, Any]]) -> bool:
         ws.send(body)
         return True
     except websocket.WebSocketTimeoutException as e:
-        print(f"auralogger: websocket send failed (timeout): {e}", file=sys.stderr)
-        _close_ws_connection()
-        return False
+        first_err: BaseException = e
     except Exception as e:
-        print(f"auralogger: websocket send failed: {e}", file=sys.stderr)
+        first_err = e
+
+    # First attempt failed — rebuild socket and retry once (2/2), and do not permanently disable logging.
+    print(
+        f"auralogger: websocket send failed ({first_err}); retrying with fresh socket (2/2)...",
+        file=sys.stderr,
+    )
+    _trace("send_batch.retry.start", {"message": str(first_err)})
+    _close_ws_connection()
+    retry_ws = _open_ws_if_needed()
+    if retry_ws is None:
+        print("auralogger: websocket unavailable after retry; dropping batch.", file=sys.stderr)
+        _trace("send_batch.retry.no_socket")
+        return False
+    try:
+        retry_ws.send(body)
+        _trace("send_batch.retry.sent")
+        return True
+    except Exception as e:
+        print(f"auralogger: websocket send failed after retry: {e}", file=sys.stderr)
+        _trace("send_batch.retry.failed", {"message": str(e)})
         _close_ws_connection()
         return False
 
@@ -280,16 +330,12 @@ def _schedule_flush() -> None:
 
 
 def _flush_now() -> None:
-    global _flush_in_flight, _send_given_up
+    global _flush_in_flight
     with _state_lock:
         if _flush_in_flight:
             return
         _flush_in_flight = True
         _cancel_flush_timer_locked()
-        if _send_given_up:
-            _batch.clear()
-            _flush_in_flight = False
-            return
     try:
         if not _proj_auth_started:
             return
@@ -297,7 +343,6 @@ def _flush_now() -> None:
         if not _proj_auth_ok or not _session:
             with _state_lock:
                 _batch.clear()
-                _send_given_up = True
             return
         live_session = _session
         while True:
@@ -309,10 +354,12 @@ def _flush_now() -> None:
                 p["session"] = live_session
             sent = _send_batch(slice_)
             if not sent:
-                # One attempt, no retry loop. Drop everything and stop until configure() resets.
+                # Best-effort semantics: drop the slice we attempted, keep any later logs so the next
+                # flush can retry with a fresh socket.
                 with _state_lock:
-                    _batch.clear()
-                    _send_given_up = True
+                    del _batch[: len(slice_)]
+                    if _batch:
+                        _schedule_flush_locked()
                 return
             with _state_lock:
                 del _batch[: len(slice_)]
@@ -322,14 +369,10 @@ def _flush_now() -> None:
 
 
 def _enqueue(payload: Dict[str, Any]) -> None:
-    if _send_given_up:
-        return
     _start_proj_auth_once()
     should_flush = False
     should_schedule = False
     with _state_lock:
-        if _send_given_up:
-            return
         was_empty = len(_batch) == 0
         _batch.append(payload)
         if len(_batch) >= BATCH_MAX_SIZE:
@@ -347,14 +390,13 @@ def _enqueue(payload: Dict[str, Any]) -> None:
 
 def _reset_proj_auth_state_locked() -> None:
     global _session, _styles, _proj_auth_started, _proj_auth_ok, _local_session_id
-    global _warned_missing_user_secret, _send_given_up
+    global _warned_missing_user_secret
     _session = None
     _styles = None
     _proj_auth_started = False
     _proj_auth_ok = False
     _local_session_id = None
     _warned_missing_user_secret = False
-    _send_given_up = False
     _proj_auth_event.clear()
 
 

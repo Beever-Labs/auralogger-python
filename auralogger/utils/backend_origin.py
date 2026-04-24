@@ -2,7 +2,6 @@
 
 import os
 from typing import Final
-from urllib.parse import quote
 
 DEFAULT_AURALOGGER_ORIGIN: Final[str] = "https://api.auralogger.com"
 DEFAULT_AURALOGGER_WEB_ORIGIN: Final[str] = "https://auralogger.com"
@@ -35,18 +34,20 @@ def resolve_ws_base_url() -> str:
     return http_origin_to_ws_base(DEFAULT_AURALOGGER_ORIGIN)
 
 
-def _encode_path_token(project_token: str) -> str:
-    """Match Node ``encodeURIComponent(projectToken.trim())`` for URL path segments."""
-    return quote(project_token.strip(), safe="-_.!~*'()")
-
-
 def build_proj_auth_url(api_base_url: str, project_token: str) -> str:
-    """``POST /api/{project_token}/proj_auth`` — token in path only (no ``secret`` header)."""
+    """``POST /api/{project_token}/proj_auth`` — token in path only (no ``secret`` header).
+
+    The project token may contain base64 characters like ``/`` and ``+`` that the server matches
+    literally, so it must NOT be percent-encoded.
+    """
     base = trim_trailing_slash(api_base_url.strip())
-    return f"{base}/api/{_encode_path_token(project_token)}/proj_auth"
+    return f"{base}/api/{project_token.strip()}/proj_auth"
 
 
 def build_project_logs_url(api_base_url: str, project_token: str) -> str:
-    """``POST /api/{project_token}/logs`` — headers ``secret`` + ``user_secret`` = user secret."""
+    """``POST /api/{project_token}/logs`` — headers ``secret`` + ``user_secret`` = user secret.
+
+    Token is embedded raw (see ``build_proj_auth_url`` for rationale).
+    """
     base = trim_trailing_slash(api_base_url.strip())
-    return f"{base}/api/{_encode_path_token(project_token)}/logs"
+    return f"{base}/api/{project_token.strip()}/logs"

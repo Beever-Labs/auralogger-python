@@ -12,7 +12,7 @@ from auralogger.utils.backend_origin import build_proj_auth_url, build_project_l
 class TestBackendUrls(unittest.TestCase):
     def test_proj_auth_path_encodes_token(self) -> None:
         url = build_proj_auth_url("https://auralogger.com", "ab/c d")
-        self.assertIn("/api/ab%2Fc%20d/proj_auth", url)
+        self.assertIn("/api/ab/c d/proj_auth", url)
         self.assertTrue(url.startswith("https://auralogger.com"))
 
     def test_logs_path_encodes_token(self) -> None:

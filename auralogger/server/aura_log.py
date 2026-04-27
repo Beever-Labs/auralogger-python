@@ -519,15 +519,23 @@ class Auralogger:
                 file=sys.stderr,
             )
             with _state_lock:
-                _proj_auth_started = True
+                # Do not permanently disable the logger. Mirror the runtime worker:
+                # allow future log() calls to retry proj_auth instead of being stuck.
+                _proj_auth_started = False
                 _proj_auth_ok = False
-                _proj_auth_event.set()
+                _proj_auth_event.clear()
             return
         with _state_lock:
             ok = _apply_proj_auth_payload(raw)
-            _proj_auth_started = True
-            _proj_auth_ok = ok
-            _proj_auth_event.set()
+            if ok:
+                _proj_auth_started = True
+                _proj_auth_ok = True
+                _proj_auth_event.set()
+            else:
+                # Bad/partial response: keep local-only mode, but allow future retries.
+                _proj_auth_started = False
+                _proj_auth_ok = False
+                _proj_auth_event.clear()
         if not ok:
             print(
                 "auralogger: proj_auth response missing project id or session; local-only logging.",

@@ -51,3 +51,35 @@ Auth contract (match Node / hosted API): **`POST /api/{project_token}/proj_auth`
 1. Change code under `auralogger/`
 2. Update `dev-docs/` (and `user-docs/` when user-visible behavior changes)
 3. Run tests or smoke checks as appropriate for your change
+
+## Smoke tests (local)
+
+### 1) Credentials for tests
+
+Local smoke scripts auto-load **`python/.env.example`** (via `python-dotenv`).
+
+Minimum for remote streaming:
+
+- `AURALOGGER_PROJECT_TOKEN`
+- `AURALOGGER_USER_SECRET` (encrypted ingest)
+
+### 2) Install editable (dev)
+
+From the repo root (PowerShell-friendly):
+
+```bash
+cd python
+pip install -e .
+```
+
+### 3) Run smoke logger
+
+```bash
+cd python
+python tests/smoke_aura_log.py smoke
+```
+
+Expected:
+
+- You see colored/styled log lines printed locally.
+- If credentials are valid and the backend is reachable, logs also stream over WebSocket (any network/config errors will print to stderr).

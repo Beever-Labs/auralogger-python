@@ -132,7 +132,7 @@ auralog("error", "Payment gateway timeout", data={"provider": "stripe"})
 auralogger get-logs -maxcount 20
 ```
 
-Each run performs **one** HTTP request and prints the `logs` array from that response. Use `**-maxcount`** (capped at **100** in the CLI) and `**-skip`** to page manually across separate runs or a small script. Full filter grammar, every field, and examples are in **CLI commands (reference)** below.
+Each run performs **one** HTTP request and prints the `logs` array from that response. Use `**-maxcount`** (capped at **100** in the CLI) and `**-nextpage`** to continue from the cursor returned by the previous response (the CLI prints it as “More results: …”). Full filter grammar, every field, and examples are in **CLI commands (reference)** below.
 
 ---
 
@@ -166,7 +166,7 @@ Run `auralogger --help` to see all commands and options.
 ```
 
 - The token after the field name must be **valid JSON**.
-- `**maxcount`** and `**skip`**: value must be a JSON **number**.
+- `**maxcount`** and `**nextpage`**: value must be a JSON **number**.
 - **All other fields**: value must be a JSON **array**.
 
 **Paging:** one CLI invocation → one request → one page of logs. There is **no** automatic multi-page loop inside the CLI.
@@ -182,7 +182,7 @@ Run `auralogger --help` to see all commands and options.
 | `time`        | `since`, `from-to`         | `since`          | JSON array (e.g. `["10m"]` for `since`; use `from-to` with a pair when supported)                                                    |
 | `order`       | `eq`                       | `eq`             | JSON array: `["newest-first"]` or `["oldest-first"]`                                                                                 |
 | `maxcount`    | `eq`                       | `eq`             | JSON number, clamped to `0..100`                                                                                                     |
-| `skip`        | `eq`                       | `eq`             | JSON number, floored, minimum `0`                                                                                                    |
+| `nextpage`    | `eq`                       | `eq`             | JSON number (cursor returned by the previous response)                                                                                 |
 | `session`     | `eq`                       | `eq`             | JSON array of session strings. If `AURALOGGER_PROJECT_SESSION` is set and you omit `-session`, the CLI prepends this filter for you. |
 | `data.<path>` | `eq`                       | `eq`             | JSON array — filter on nested `data` using a dot path (e.g. `data.userId`)                                                           |
 
@@ -193,7 +193,7 @@ If you omit `--<operator>`, the default operator for that field is used (for exa
 
 ```bash
 auralogger get-logs -type '["error","warn"]' -maxcount 50
-auralogger get-logs -message '["timeout"]' -skip 20 -maxcount 30
+auralogger get-logs -message '["timeout"]' -nextpage 18423 -maxcount 30
 auralogger get-logs -type --not-in '["info","debug"]' -time --since '["10m"]'
 auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
 auralogger get-logs -order '["oldest-first"]' -maxcount 25
@@ -206,7 +206,7 @@ auralogger get-logs -order '["oldest-first"]' -maxcount 25
 - `Missing value for field '…'`
 - `Invalid JSON for field '…'`
 - `Field '…' expects a JSON array token`
-- `Field 'maxcount' expects a JSON number token` (and similarly for `skip`)
+- `Field 'maxcount' expects a JSON number token` (and similarly for `nextpage`)
 - `Invalid op '…' for field '…'`
 - `Unknown filter field: …`
 

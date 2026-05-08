@@ -69,7 +69,7 @@ auralogger server-check
 - `field` starts with `-`.
 - `op` is optional and starts with `--`.
 - The value must be valid JSON.
-- For `maxcount` and `skip`, the value must be a JSON number.
+- For `maxcount` and `nextpage`, the value must be a JSON number.
 - For all other fields, the value must be a JSON array.
 
 ### Fields and operators
@@ -82,14 +82,14 @@ auralogger server-check
 | `time` | `since`, `from-to` | `since` | JSON array |
 | `order` | `eq` | `eq` | JSON array (`["newest-first"]` or `["oldest-first"]`) |
 | `maxcount` | `eq` | `eq` | JSON number (clamped `0..100`) |
-| `skip` | `eq` | `eq` | JSON number (floored, min `0`) |
+| `nextpage` | `eq` | `eq` | JSON number (cursor returned by the previous response) |
 | `data.<path>` | `eq` | `eq` | JSON array |
 
 ### Examples
 
 ```bash
 auralogger get-logs -type '["error","warn"]' -maxcount 50
-auralogger get-logs -message '["timeout"]' -skip 20 -maxcount 30
+auralogger get-logs -message '["timeout"]' -nextpage 18423 -maxcount 30
 auralogger get-logs -type --not-in '["info","debug"]' -time --since '["10m"]'
 auralogger get-logs -data.userId '["06431f39-55e2-4289-80c8-5d0340a8b66e"]'
 ```

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Mapping, Tuple, cast
@@ -24,7 +25,7 @@ from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, prin
 from auralogger.cli.get_logs_filters import normalize_and_validate_filters, with_default_session_filter
 from auralogger.cli.log_print import print_log
 from auralogger.cli.log_styles import build_style_entries_from_api
-from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.server.proj_auth import fetch_proj_auth_payload_for_cli
 from auralogger.utils.backend_origin import build_project_logs_url, resolve_api_base_url
 from auralogger.utils.env_config import (
     get_resolved_project_token,
@@ -34,6 +35,11 @@ from auralogger.utils.env_config import (
 )
 from auralogger.utils.http_utils import parse_error_body
 from auralogger.utils.parser import parse_command
+
+
+LOGS_RETRY_ATTEMPTS = 3
+LOGS_RETRY_DELAY_S = 0.5
+TRANSIENT_PROJECT_SECRET_MARKER = "Failed to resolve project secret"
 
 
 def _is_record(value: object) -> bool:
@@ -59,18 +65,17 @@ def format_get_logs_help() -> str:
     )
 
 
-def _post_logs(
-    base_url: str,
-    project_token: str,
-    user_secret: str,
-    filters: List[Dict[str, Any]],
-) -> Tuple[Dict[str, Any], bool]:
-    route = build_project_logs_url(base_url, project_token)
-    body_bytes = json.dumps({"filters": filters}).encode("utf8")
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if user_secret:
-        headers["secret"] = user_secret
-        headers["user_secret"] = user_secret
+def _post_logs_attempt(
+    route: str,
+    body_bytes: bytes,
+    headers: Dict[str, str],
+) -> Dict[str, Any]:
+    """One attempt of the logs POST. Returns:
+        {"kind": "ok", "body": dict}
+        {"kind": "not_found"}
+        {"kind": "transient", "message": str}
+        {"kind": "fatal", "message": str}
+    """
     req = urllib.request.Request(route, data=body_bytes, method="POST", headers=headers)
     try:
         with urllib.request.urlopen(req) as resp:
@@ -79,6 +84,70 @@ def _post_logs(
             hdrs = resp.headers
     except urllib.error.HTTPError as e:
         if e.code == 404:
+            return {"kind": "not_found"}
+        status = e.code
+        raw = e.read()
+        hdrs = e.headers
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", e)
+        return {
+            "kind": "transient",
+            "message": (
+                f"Can't reach Auralogger to fetch logs — check connection and try again. ({reason}) "
+                f"{ENV_RECOVERY_HINT_PLAIN}"
+            ),
+        }
+
+    if status < 200 or status >= 300:
+        ctype = hdrs.get("content-type", "")
+        body_text = parse_error_body(status, ctype, raw)
+        authish = status == 401 or status == 403
+        message = f"{body_text} {ENV_RECOVERY_HINT_PLAIN}" if authish else body_text
+        transient_server = status >= 500
+        transient_secret = (
+            status == 401 and TRANSIENT_PROJECT_SECRET_MARKER in body_text
+        )
+        if transient_server or transient_secret:
+            return {"kind": "transient", "message": message}
+        return {"kind": "fatal", "message": message}
+
+    try:
+        body: object = json.loads(raw.decode("utf8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {"kind": "fatal", "message": "The log list came back garbled (not JSON). Try again?"}
+
+    if not _is_record(body):
+        return {"kind": "fatal", "message": "The log list didn’t look right. Weird — try again."}
+    return {"kind": "ok", "body": cast(Dict[str, Any], body)}
+
+
+def _build_logs_headers(secret: str) -> Dict[str, str]:
+    headers: Dict[str, str] = {"Content-Type": "application/json"}
+    if secret:
+        headers["secret"] = secret
+        headers["user_secret"] = secret
+    return headers
+
+
+def _post_logs(
+    base_url: str,
+    project_token: str,
+    user_secret: str,
+    filters: List[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], bool]:
+    route = build_project_logs_url(base_url, project_token)
+    body_bytes = json.dumps({"filters": filters}).encode("utf8")
+
+    active_secret = user_secret
+    dropped_secret = False
+    last_transient = ""
+
+    for attempt in range(1, LOGS_RETRY_ATTEMPTS + 1):
+        result = _post_logs_attempt(route, body_bytes, _build_logs_headers(active_secret))
+        kind = result["kind"]
+        if kind == "ok":
+            return cast(Dict[str, Any], result["body"]), False
+        if kind == "not_found":
             print(
                 yellow("⚠️ ")
                 + white("POST ")
@@ -91,32 +160,32 @@ def _post_logs(
                 + dim("."),
             )
             return {"logs": []}, True
-        status = e.code
-        raw = e.read()
-        hdrs = e.headers
-    except urllib.error.URLError as e:
-        reason = getattr(e, "reason", e)
-        raise ValueError(
-            f"Can't reach Auralogger to fetch logs — check connection and try again. ({reason}) "
-            f"{ENV_RECOVERY_HINT_PLAIN}"
-        ) from e
+        if kind == "fatal":
+            raise ValueError(str(result["message"]))
 
-    if status < 200 or status >= 300:
-        ctype = hdrs.get("content-type", "")
-        body_text = parse_error_body(status, ctype, raw)
-        authish = status == 401 or status == 403
-        raise ValueError(
-            f"{body_text} {ENV_RECOVERY_HINT_PLAIN}" if authish else body_text
-        )
+        # Auto-fallback: if the server rejected our user_secret with the
+        # project-secret error, drop the header and retry immediately. Covers
+        # ingestion-role tokens and stale env user_secrets on non-encrypted projects.
+        message = str(result["message"])
+        if (
+            active_secret
+            and not dropped_secret
+            and TRANSIENT_PROJECT_SECRET_MARKER in message
+        ):
+            active_secret = ""
+            dropped_secret = True
+            print(
+                yellow("⚠️ ")
+                + white(
+                    "Server rejected user_secret — retrying without it (project may be non-encrypted or token role lacks decrypt access)."
+                )
+            )
+            continue
 
-    try:
-        body: object = json.loads(raw.decode("utf8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        raise ValueError("The log list came back garbled (not JSON). Try again?") from None
-
-    if not _is_record(body):
-        raise ValueError("The log list didn’t look right. Weird — try again.")
-    return cast(Dict[str, Any], body), False
+        last_transient = message
+        if attempt < LOGS_RETRY_ATTEMPTS:
+            time.sleep(LOGS_RETRY_DELAY_S)
+    raise ValueError(last_transient)
 
 
 def run_get_logs_core(
@@ -190,29 +259,37 @@ def run_get_logs(argv: List[str]) -> None:
 
     user_secret = ""
     config_styles: Any = try_parse_resolved_styles()
+    user_secret_from_env = get_resolved_user_secret()
 
-    # If we already have a secret locally, assume encrypted and skip proj_auth.
-    if get_resolved_user_secret() is not None:
-        user_secret = resolve_user_secret_for_init()
-    else:
-        print(dim("🔐 ") + white("Authenticating with Auralogger…"))
-        try:
-            raw = fetch_proj_auth_payload(project_token)
-            encrypted = raw.get("encrypted")
-            if encrypted:
-                user_secret = resolve_user_secret_for_init()
-            if config_styles is None:
-                styles_raw = raw.get("styles")
-                rows = styles_raw if isinstance(styles_raw, list) else []
-                config_styles = build_style_entries_from_api(rows)
-        except ValueError as e:
-            print(
-                yellow("⚠️ ")
-                + white(
-                    f"Couldn't reach Auralogger for auth ({e}). Using env config if available."
-                )
-            )
+    # Always hit proj_auth first so we know whether the project is encrypted.
+    # Sending user_secret to a non-encrypted project (or with an ingestion-role
+    # token) gets a hard 401 "Failed to resolve project secret" from the server.
+    print(dim("🔐 ") + white("Authenticating with Auralogger…"))
+    try:
+        raw = fetch_proj_auth_payload_for_cli(project_token)
+        encrypted = raw.get("encrypted")
+        if encrypted:
             user_secret = resolve_user_secret_for_init()
+        # For non-encrypted projects, deliberately ignore any AURALOGGER_USER_SECRET
+        # in env — sending it can cause "Failed to resolve project secret".
+        if config_styles is None:
+            styles_raw = raw.get("styles")
+            rows = styles_raw if isinstance(styles_raw, list) else []
+            config_styles = build_style_entries_from_api(rows)
+    except ValueError as e:
+        # Couldn't determine encrypted: fall back to env. The auto-fallback in
+        # _post_logs will drop user_secret if the server rejects it.
+        print(
+            yellow("⚠️ ")
+            + white(
+                f"Couldn't reach Auralogger for auth ({e}). Using env config if available."
+            )
+        )
+        user_secret = (
+            user_secret_from_env
+            if user_secret_from_env is not None
+            else resolve_user_secret_for_init()
+        )
 
     if config_styles is None:
         config_styles = build_style_entries_from_api([])

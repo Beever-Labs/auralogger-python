@@ -13,7 +13,7 @@ from auralogger.cli.aside_pools import (
 )
 from auralogger.cli.cli_style import cyan
 from auralogger.cli.cli_tone import print_aside
-from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.server.proj_auth import fetch_proj_auth_payload_for_cli
 from auralogger.utils.env_config import ENV_PROJECT_TOKEN
 from auralogger.utils.env_config import (
     ENV_USER_SECRET,
@@ -72,7 +72,7 @@ def resolve_user_secret_for_init() -> str:
 def resolve_project_context_for_cli_checks() -> CliProjectContext:
     project_token = resolve_project_token_for_init()
     user_secret = resolve_user_secret_for_init()
-    raw = fetch_proj_auth_payload(project_token)
+    raw = fetch_proj_auth_payload_for_cli(project_token)
     auth = cast(Dict[str, Any], raw)
 
     project_id_raw = auth.get("project_id")

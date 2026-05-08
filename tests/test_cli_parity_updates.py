@@ -29,7 +29,7 @@ class CliContextResolverTests(unittest.TestCase):
         ), patch(
             "auralogger.cli.cli_auth.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.cli.cli_auth.fetch_proj_auth_payload",
+            "auralogger.cli.cli_auth.fetch_proj_auth_payload_for_cli",
             return_value={"project_id": "pid-1", "project_name": "proj", "session": "sess-1"},
         ):
             ctx = resolve_project_context_for_cli_checks()
@@ -51,7 +51,7 @@ class CliContextResolverTests(unittest.TestCase):
         ), patch(
             "auralogger.cli.cli_auth.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.cli.cli_auth.fetch_proj_auth_payload",
+            "auralogger.cli.cli_auth.fetch_proj_auth_payload_for_cli",
             return_value={"project_id": "pid-1", "session": ""},
         ):
             with self.assertRaises(ValueError):
@@ -93,7 +93,7 @@ class InitParityTests(unittest.TestCase):
         with patch(
             "auralogger.cli.commands.init.is_full_runtime_env_configured", return_value=True
         ), patch(
-            "auralogger.cli.commands.init.fetch_proj_auth_payload"
+            "auralogger.cli.commands.init.fetch_proj_auth_payload_for_cli"
         ) as fetch_proj_auth, redirect_stdout(output):
             run_init()
 
@@ -117,7 +117,7 @@ class InitParityTests(unittest.TestCase):
         ), patch(
             "auralogger.cli.commands.init.resolve_user_secret_for_init", return_value="usec"
         ), patch(
-            "auralogger.cli.commands.init.fetch_proj_auth_payload",
+            "auralogger.cli.commands.init.fetch_proj_auth_payload_for_cli",
             return_value={"project_id": "pid-1", "session": "sess-1", "styles": []},
         ), redirect_stdout(output):
             run_init()

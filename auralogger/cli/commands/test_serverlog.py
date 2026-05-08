@@ -26,7 +26,7 @@ def run_test_serverlog() -> None:
 
     project_token = resolve_project_token_for_init()
     user_secret = resolve_user_secret_for_init()
-    Auralogger.sync_from_secret(project_token, user_secret)
+    Auralogger.configure(project_token, user_secret)
 
     for i in range(1, 6):
         aura_log(

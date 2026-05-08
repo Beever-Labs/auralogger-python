@@ -27,7 +27,7 @@ from auralogger.cli.cli_style import (
 )
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside, print_aside_maybe
 from auralogger.cli.log_styles import build_style_entries_from_api
-from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.server.proj_auth import fetch_proj_auth_payload_for_cli
 from auralogger.utils.env_config import (
     ENV_PROJECT_SESSION,
     ENV_PROJECT_TOKEN,
@@ -361,7 +361,7 @@ def run_init() -> None:
 
     project_token = resolve_project_token_for_init()
 
-    raw = fetch_proj_auth_payload(project_token)
+    raw = fetch_proj_auth_payload_for_cli(project_token)
     payload = build_init_payload(cast(Dict[str, Any], raw), project_token)
     encrypted: bool = payload.get("encrypted", True)  # type: ignore[assignment]
 

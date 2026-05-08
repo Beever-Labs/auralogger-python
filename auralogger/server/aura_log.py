@@ -544,7 +544,10 @@ class Auralogger:
 
     @staticmethod
     def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
-        """Eagerly run proj_auth. Detects ``encrypted`` flag from the response."""
+        """Eagerly run proj_auth. Mirrors node ``AuraServer.syncFromSecret``: when a user
+        secret is supplied, route over the encrypted ``/create_log`` ingest path; without
+        a secret, use the open ``/create_browser_logs`` path. The server's ``encrypted``
+        flag is informational only — the WS route is driven by secret presence."""
         trimmed = project_token.strip()
         if not trimmed:
             print(
@@ -560,14 +563,8 @@ class Auralogger:
                 file=sys.stderr,
             )
             return
-        enc = _read_encrypted_flag(raw)
         secret = user_secret.strip() if isinstance(user_secret, str) else ""
-        if enc and not secret:
-            print(
-                "auralogger: missing user secret for encrypted project; local-only logging.",
-                file=sys.stderr,
-            )
-            return
+        enc = bool(secret)
         Auralogger._apply_runtime_config(trimmed, secret, enc)
         # Install the already-fetched payload so we don't re-call proj_auth.
         global _proj_auth_started, _proj_auth_ok

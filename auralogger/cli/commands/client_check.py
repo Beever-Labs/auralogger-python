@@ -22,7 +22,7 @@ from auralogger.cli.cli_auth import resolve_project_token_for_init
 from auralogger.cli.cli_load_env import ensure_utf8_stdio
 from auralogger.cli.cli_style import bold_white, dim, green, hex_color, white
 from auralogger.cli.cli_tone import maybe_print_generic_spice, print_aside
-from auralogger.server.proj_auth import fetch_proj_auth_payload
+from auralogger.server.proj_auth import fetch_proj_auth_payload_for_cli
 from auralogger.utils.backend_origin import resolve_ws_base_url
 
 CONNECT_TIMEOUT_S = 5
@@ -50,7 +50,7 @@ def run_client_check() -> None:
     ensure_utf8_stdio()
 
     project_token = resolve_project_token_for_init()
-    raw = fetch_proj_auth_payload(project_token)
+    raw = fetch_proj_auth_payload_for_cli(project_token)
     auth = cast(Dict[str, Any], raw)
 
     project_id_raw = auth.get("project_id")

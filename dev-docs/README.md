@@ -62,6 +62,7 @@ Minimum for remote streaming:
 
 - `AURALOGGER_PROJECT_TOKEN`
 - `AURALOGGER_USER_SECRET` (encrypted ingest)
+- `AURALOGGER_PROJECT_SESSION` (optional — `configure()` reads it from env; falls back to `proj_auth` when unset)
 
 ### 2) Install editable (dev)
 

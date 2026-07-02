@@ -30,6 +30,7 @@ from auralogger.server.proj_auth import fetch_proj_auth_payload
 from auralogger.utils.backend_origin import resolve_ws_base_url
 from auralogger.utils.env_config import (
     get_resolved_project_token,
+    get_resolved_session,
     get_resolved_user_secret,
 )
 
@@ -74,6 +75,9 @@ _user_secret: Optional[str] = None
 _encrypted: bool = True
 
 _session: Optional[str] = None
+# Explicit session supplied at configure time (param or env). When set it wins
+# over the proj_auth session; when None we fall back to the proj_auth session.
+_override_session: Optional[str] = None
 _styles: Optional[Any] = None
 
 _proj_auth_event = threading.Event()
@@ -340,11 +344,13 @@ def _flush_now() -> None:
         if not _proj_auth_started:
             return
         _proj_auth_event.wait()
-        if not _proj_auth_ok or not _session:
+        # Prefer an explicit session (configure param / env); fall back to proj_auth.
+        effective_session = _override_session or _session
+        if not _proj_auth_ok or not effective_session:
             with _state_lock:
                 _batch.clear()
             return
-        live_session = _session
+        live_session = effective_session
         while True:
             with _state_lock:
                 if not _batch:
@@ -441,7 +447,7 @@ def aura_log(
     payload: Dict[str, Any] = {
         "type": _normalize_type(type),
         "message": "" if message is None else str(message),
-        "session": _session or _get_or_create_local_session(),
+        "session": _override_session or _session or _get_or_create_local_session(),
         "created_at": _iso_timestamp_utc(),
     }
     loc = _normalize_location(location)
@@ -465,28 +471,35 @@ def aura_log(
 class Auralogger:
     """Logger wrapper: configure, sync, log, close socket.
 
-    Encrypted flow (default): ``configure(project_token, user_secret)``
-    Non-encrypted flow:        ``configure(project_token, enc=False)``
+    Encrypted flow (default): ``configure(project_token, user_secret, session=...)``
+    Non-encrypted flow:        ``configure(project_token, session=..., enc=False)``
+
+    Session precedence: explicit ``session`` arg → ``AURALOGGER_PROJECT_SESSION`` env → ``proj_auth``.
     """
 
     @staticmethod
     def _apply_runtime_config(
         project_token: str,
         user_secret: str,
+        session: str = "",
         enc: bool = True,
     ) -> None:
-        global _project_token, _user_secret, _encrypted
+        global _project_token, _user_secret, _encrypted, _override_session
         with _state_lock:
             _project_token = project_token or None
             _user_secret = user_secret or None
             _encrypted = enc
             _reset_proj_auth_state_locked()
             _reset_batch_state_locked()
+            _override_session = (
+                session.strip() if isinstance(session, str) and session.strip() else None
+            )
 
     @staticmethod
     def configure(
         project_token: Optional[str] = None,
         user_secret: Optional[str] = None,
+        session: Optional[str] = None,
         enc: bool = True,
     ) -> None:
         # configure-time env fallback is a convenience for zero-arg callers.
@@ -501,14 +514,20 @@ class Auralogger:
             if isinstance(user_secret, str)
             else (get_resolved_user_secret() or "")
         )
+        # Session precedence: explicit arg → env → proj_auth (resolved later).
+        sess = (
+            session.strip()
+            if isinstance(session, str)
+            else (get_resolved_session() or "")
+        )
         if not token:
-            Auralogger._apply_runtime_config("", "", enc)
+            Auralogger._apply_runtime_config("", "", sess, enc)
             print(
                 "auralogger: configure called with empty project token; continuing in local-only mode.",
                 file=sys.stderr,
             )
             return
-        Auralogger._apply_runtime_config(token, secret, enc)
+        Auralogger._apply_runtime_config(token, secret, sess, enc)
         # Run proj_auth synchronously so session/styles are ready for the first log.
         global _proj_auth_started, _proj_auth_ok
         try:
@@ -543,11 +562,17 @@ class Auralogger:
             )
 
     @staticmethod
-    def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
+    def sync_from_secret(
+        project_token: str,
+        user_secret: Optional[str] = None,
+        session: Optional[str] = None,
+    ) -> None:
         """Eagerly run proj_auth. Mirrors node ``AuraServer.syncFromSecret``: when a user
         secret is supplied, route over the encrypted ``/create_log`` ingest path; without
         a secret, use the open ``/create_browser_logs`` path. The server's ``encrypted``
-        flag is informational only — the WS route is driven by secret presence."""
+        flag is informational only — the WS route is driven by secret presence.
+
+        ``session`` precedence: explicit arg → env → proj_auth response."""
         trimmed = project_token.strip()
         if not trimmed:
             print(
@@ -564,8 +589,13 @@ class Auralogger:
             )
             return
         secret = user_secret.strip() if isinstance(user_secret, str) else ""
+        sess = (
+            session.strip()
+            if isinstance(session, str)
+            else (get_resolved_session() or "")
+        )
         enc = bool(secret)
-        Auralogger._apply_runtime_config(trimmed, secret, enc)
+        Auralogger._apply_runtime_config(trimmed, secret, sess, enc)
         # Install the already-fetched payload so we don't re-call proj_auth.
         global _proj_auth_started, _proj_auth_ok
         with _state_lock:

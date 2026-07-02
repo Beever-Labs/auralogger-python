@@ -7,8 +7,8 @@ Run from the ``python/`` directory after install::
     pip install -e .
     python tests/smoke_aura_log.py
 
-With ``AURALOGGER_PROJECT_TOKEN`` and ``AURALOGGER_USER_SECRET`` set (and the API reachable so
-``proj_auth`` can supply id/session/styles if they are not in env), logs are also sent over the
+With ``AURALOGGER_PROJECT_TOKEN`` and ``AURALOGGER_USER_SECRET`` set (and optionally
+``AURALOGGER_PROJECT_SESSION`` — otherwise ``proj_auth`` supplies session), logs are also sent over the
 WebSocket. Without token/secret, you still see colored lines locally and a one-time note on stderr
 about console-only mode.
 """

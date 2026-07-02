@@ -37,7 +37,7 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 
 - `auralogger/commands/test_serverlog.py`
   - `auralogger test-serverlog`
-  - Resolves token + secret (env/prompt), syncs runtime via `Auralogger.sync_from_secret(...)`, sends 5 logs via `aura_log(...)`, then closes the cached socket
+  - Resolves token + secret (env/prompt), configures runtime via `Auralogger.configure(...)` (session from env or `proj_auth`), sends 5 logs via `aura_log(...)`, then closes the cached socket
 
 - `auralogger/commands/get_logs_cmd.py`
   - Thin wrapper → `get_logs.run_get_logs`
@@ -54,7 +54,7 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 ## Configuration (os.environ)
 
 - `auralogger/env_config.py`
-  - `AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET`, optional `NEXT_PUBLIC_*` / `VITE_*` aliases for token resolution
+  - `AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET`, `AURALOGGER_PROJECT_SESSION`, optional `NEXT_PUBLIC_*` / `VITE_*` aliases
 
 ## HTTP
 
@@ -71,7 +71,7 @@ Use these pairs when keeping Python terminology close to Node while preserving P
 ## Runtime logger (library)
 
 - `auralogger/server/aura_log.py`
-  - Bearer WebSocket, path uses project token; optional `proj_auth` hydration (cached) for id/session/styles
+  - Bearer WebSocket, path uses project token; `proj_auth` hydration for styles and session fallback; `configure()` / `sync_from_secret()` accept optional `session` (arg → env → `proj_auth`)
 
 ## Supporting modules
 

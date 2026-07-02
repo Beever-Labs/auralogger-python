@@ -2,6 +2,10 @@
 
 All notable changes to the Python package are documented in this file.
 
+## [0.1.10] - 2026-07-02
+
+- Added optional `session` argument to `Auralogger.configure(...)` and `Auralogger.sync_from_secret(...)`. Session precedence: explicit arg → `AURALOGGER_PROJECT_SESSION` from env → `proj_auth` response.
+
 ## [Unreleased]
 
 - **Breaking:** renamed the Python logger export **`auralogger`** → **`Auralogger`** (`from auralogger import Auralogger`) to match Node’s naming.

@@ -52,7 +52,9 @@ If token or user secret is missing after `.env` is loaded, the CLI will prompt b
 
 Run `auralogger init` once and paste the printed module, or follow the shapes below.
 
-**Encryption is optional per project.** If your project has **no encryption enabled**, you only need `AURALOGGER_PROJECT_TOKEN` and you can configure without a user secret. If your project **is encrypted**, you’ll configure with both `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET`.
+**Encryption is optional per project.** If your project has **no encryption enabled**, you only need `AURALOGGER_PROJECT_TOKEN` (and optionally `AURALOGGER_PROJECT_SESSION`). If your project **is encrypted**, configure with `AURALOGGER_PROJECT_TOKEN`, `AURALOGGER_USER_SECRET`, and optionally `AURALOGGER_PROJECT_SESSION`.
+
+**Session precedence** when calling `Auralogger.configure(...)`: explicit `session` argument → `AURALOGGER_PROJECT_SESSION` from env → `proj_auth` response.
 
 #### No encryption (recommended first): token only
 
@@ -63,8 +65,10 @@ from auralogger import Auralogger
 
 def ensureConfigured() -> None:
     project_token = os.environ.get("AURALOGGER_PROJECT_TOKEN", "").strip()
+    project_session = os.environ.get("AURALOGGER_PROJECT_SESSION", "").strip()
     # Silent opt-out: empty token keeps local-only logging.
-    Auralogger.configure(project_token)
+    # Session: env → proj_auth fallback when session arg is empty.
+    Auralogger.configure(project_token, session=project_session)
 
 def auralog(
     type: Literal["debug", "info", "warn", "error"],
@@ -76,7 +80,7 @@ def auralog(
     Auralogger.log(type, message, location, data)
 ```
 
-#### Encrypted projects: token + user secret
+#### Encrypted projects: token + user secret (+ optional session)
 
 ```py
 import os
@@ -86,10 +90,11 @@ from auralogger import Auralogger
 def ensureConfigured() -> None:
     project_token = os.environ.get('AURALOGGER_PROJECT_TOKEN', '').strip()
     user_secret = os.environ.get('AURALOGGER_USER_SECRET', '').strip()
+    project_session = os.environ.get('AURALOGGER_PROJECT_SESSION', '').strip()
     # Silent opt-out: missing creds keep local-only logging.
-    Auralogger.configure(project_token, user_secret)
-    # Auralogger.configure()  — omit credentials to print locally only (no streaming for removing network delay and cost).
-   
+    # Session: env → proj_auth fallback when session arg is empty.
+    Auralogger.configure(project_token, user_secret, session=project_session)
+    # Auralogger.configure()  — omit credentials to print locally only (no streaming).
 
 def auralog(
     type: Literal['debug', 'info', 'warn', 'error'],
@@ -153,9 +158,9 @@ Run `auralogger --help` to see all commands and options.
 
 | Command          | Arguments      | What it does                                                                                                                                                                                                                      |
 | ---------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `init`           | —              | Prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET`, prints copy-paste `.env` lines (token, user secret, session), then a **Python** server integration snippet with `sync_from_secret` and `auralog(...)`. |
+| `init`           | —              | Prompts for missing `AURALOGGER_PROJECT_TOKEN` / `AURALOGGER_USER_SECRET`, prints copy-paste `.env` lines (token, user secret, session), then a **Python** server integration snippet with `configure(...)` and `auralog(...)`. |
 | `server-check`   | —              | One **server-side** test log over WebSocket; prompts for missing token or user secret if needed.                                                                                                                                  |
-| `test-serverlog` | —              | Calls `sync_from_secret`, sends **5** logs via `aura_log`, then closes the cached socket.                                                                                                                                         |
+| `test-serverlog` | —              | Calls `Auralogger.configure(...)`, sends **5** logs via `aura_log`, then closes the cached socket.                                                                                                                                         |
 | `get-logs`       | `[filters...]` | `POST` to project logs with token + user secret (env or prompt). If styles are not in env, the CLI resolves them for that run so terminal colors match the dashboard when possible.                                               |
 
 
@@ -221,7 +226,7 @@ This package is for **Python on the server**. For React, Vue, Next, Vite, or any
 ## When something does not work
 
 - **Wrong directory** — Run the CLI from the folder that contains `.env`, or export variables in the shell.
-- **Logs never reach the dashboard** — Confirm `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` are set for the process (or passed explicitly in your configure step). Logs always print locally — if they're not reaching the dashboard, check credentials and network; send/socket failures surface as stderr messages.
+- **Logs never reach the dashboard** — Confirm `AURALOGGER_PROJECT_TOKEN` and `AURALOGGER_USER_SECRET` are set for the process (or passed explicitly in your configure step). Set `AURALOGGER_PROJECT_SESSION` in env or pass `session=` to `configure()`; when omitted, the SDK falls back to the session from `proj_auth`. Logs always print locally — if they're not reaching the dashboard, check credentials and network; send/socket failures surface as stderr messages.
 - `**get-logs` looks plain** — Optional style env vars are documented in `[user-docs/environment.md](user-docs/environment.md)`; the CLI can still resolve styling for a run when those are unset.
 
 ---

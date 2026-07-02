@@ -38,8 +38,8 @@ Node parity reference: `node/dev-docs/feature-flows.md` — both packages implem
 | **`init`** | Path on `proj_auth`; env or prompt | Prompt/env (encrypted only); **not** sent on `proj_auth` | `encrypted` field from response (bool or `"true"` string) | `resolve_api_base_url()` | — |
 | **`get-logs`** | Path on `/api/{token}/logs` | Headers `secret` + `user_secret` (encrypted path only) | `proj_auth` if secret not in env | `resolve_api_base_url()` | — |
 | **`server-check`** | Path on `proj_auth` + WS URL | `Authorization: Bearer` header on WS | Always encrypted (Bearer WS) | `resolve_api_base_url()` for `proj_auth` | `resolve_ws_base_url()` |
-| **`test-serverlog`** | `sync_from_secret`, then SDK path | Bearer on WS | `proj_auth` encrypted field | `resolve_api_base_url()` | `resolve_ws_base_url()` |
-| **`aura_log` (SDK)** | Module-level override or env | Module-level override or env | `_encrypted` flag (set by `configure`/`sync_from_secret`) | `resolve_api_base_url()` for proj_auth | `resolve_ws_base_url()` for ingest |
+| **`test-serverlog`** | `configure`, then SDK path | Bearer on WS | `enc` flag from configure | `resolve_api_base_url()` | `resolve_ws_base_url()` |
+| **`aura_log` (SDK)** | Module-level override or env | Module-level override or env | `_encrypted` flag (set by `configure`/`sync_from_secret`); session: arg → env → `proj_auth` | `resolve_api_base_url()` for proj_auth | `resolve_ws_base_url()` for ingest |
 
 **`encrypted` flag decoding** (applied in three places — all must agree):
 
@@ -430,8 +430,9 @@ def run_init() -> None:
     #      prints "was already set — omitted" notes for pre-existing keys
     #      encrypted=False: omits user_secret line entirely
     # 2. print_init_helper_snippets(encrypted):
-    #      syntax-highlighted Python snippet: import, configure(), auralog() wrapper
-    #      encrypted=False variant: configure(project_token) only (no secret arg)
+    #      syntax-highlighted Python snippet: import, configure(project_token, user_secret, session=...), auralog() wrapper
+    #      encrypted=False variant: configure(project_token, session=...) only (no secret arg)
+    #      session arg reads AURALOGGER_PROJECT_SESSION from env; empty → proj_auth fallback
     #      usage snippet with example auralog() calls
 ```
 
@@ -651,17 +652,13 @@ def run_test_serverlog() -> None:
     project_token = resolve_project_token_for_init()   # env or prompt
     user_secret   = resolve_user_secret_for_init()     # env or prompt
 
-    Auralogger.sync_from_secret(project_token, user_secret)
-    # sync_from_secret():
+    Auralogger.configure(project_token, user_secret)
+    # configure():
+    #   session = AURALOGGER_PROJECT_SESSION from env (or proj_auth fallback)
     #   raw = fetch_proj_auth_payload(project_token)    → POST proj_auth
-    #   enc = _read_encrypted_flag(raw)                → bool
-    #   if enc and not user_secret: raise RuntimeError
-    #   _apply_runtime_config(project_token, user_secret, enc)
-    #     → sets _override_project_token, _override_user_secret, _encrypted
-    #     → resets _local_session_id, clears _hydration_cache_*
-    #   validate project_id + session present in raw
-    #   populate _hydration_cache_token / _hydration_cache_raw
-    # After this call: first aura_log() will find cache already warm
+    #   _apply_runtime_config(project_token, user_secret, session, enc)
+    #   _apply_proj_auth_payload(raw)  → sets _session when no override
+    # After this call: proj_auth has run; session is ready for first aura_log()
 
     for i in range(1, 6):
         aura_log("info", f"test-serverlog log {i}/5", "cli/test-serverlog", {"i": i, "kind": "test-serverlog"})
@@ -708,12 +705,11 @@ def aura_log(type, message, location=None, data=None) -> None:
 
         "message":    "" if message is None else str(message),
 
-        "session":    _get_or_create_local_session(),
-        # _get_or_create_local_session():
-        #   if _local_session_id is None:
-        #       _local_session_id = str(uuid.uuid4())
-        #   return _local_session_id
-        # NOTE: this is a process-local UUID, replaced by the real project session before send
+        "session":    _override_session or _session or _get_or_create_local_session(),
+        # Session precedence at configure time: explicit arg → AURALOGGER_PROJECT_SESSION env → proj_auth.
+        # _override_session: set by configure()/sync_from_secret() from arg or env.
+        # _session: set by proj_auth when no override.
+        # _get_or_create_local_session(): process-local UUID until proj_auth completes.
 
         "created_at": _iso_timestamp_utc(),
         # datetime.now(timezone.utc) formatted as "YYYY-MM-DDTHH:MM:SS.microsecondsZ"
@@ -796,17 +792,16 @@ def aura_log(type, message, location=None, data=None) -> None:
         return    # proj_auth failed or returned incomplete data
 ```
 
-### Step 6 — replace local session UUID with real project session, then enqueue
+### Step 6 — stamp effective session on flush, then send
 
 ```python
-    send_payload = payload.copy()
-    send_payload["session"] = merged["session"]
-    # The local UUID session is used only for console echo ordering.
-    # The backend requires the real project session from proj_auth to attribute the log.
+    # On flush (_flush_now), each payload's session is overwritten with:
+    effective_session = _override_session or _session
+    # _override_session: explicit configure arg or AURALOGGER_PROJECT_SESSION from env.
+    # _session: from proj_auth when no override was supplied.
+    p["session"] = effective_session
 
-    _enqueue_payload_for_send(project_token, user_secret or "", send_payload)
-    # → appends to _send_buffer, starts/resets 30 ms flush timer
-    # → see Batch / flush subsystem
+    _enqueue(payload)   # batched; flush timer or BATCH_MAX_SIZE triggers send
 ```
 
 ### `_fetch_proj_auth_cached` — locked single-flight with retry
@@ -1008,82 +1003,61 @@ Static-method wrapper over module-level state in `aura_log.py`. All persistent s
 
 ```python
 @staticmethod
-def configure(project_token=None, user_secret=None) -> None:
+def configure(project_token=None, user_secret=None, session=None, enc=True) -> None:
     # 1. Resolve args: passed string → strip, else fall back to os.environ key
-    resolved_token  = project_token.strip()  if isinstance(project_token, str)  else os.environ.get("AURALOGGER_PROJECT_TOKEN","").strip()
-    resolved_secret = user_secret.strip()    if isinstance(user_secret, str)    else os.environ.get("AURALOGGER_USER_SECRET","").strip()
+    token   = project_token.strip() if isinstance(project_token, str) else (get_resolved_project_token() or "")
+    secret  = user_secret.strip()   if isinstance(user_secret, str)   else (get_resolved_user_secret() or "")
+    # Session precedence: explicit arg → AURALOGGER_PROJECT_SESSION env → proj_auth (later)
+    sess    = session.strip()         if isinstance(session, str)       else (get_resolved_session() or "")
 
-    if not resolved_token:
-        _apply_runtime_config(resolved_token, resolved_secret)
+    if not token:
+        _apply_runtime_config("", "", sess, enc)
         return    # no-op config: token empty → console-only until set
 
-    # 2. Fetch proj_auth to discover encrypted flag (blocking HTTP call)
-    raw = fetch_proj_auth_payload(resolved_token)
-    enc = _read_encrypted_flag(raw)
+    _apply_runtime_config(token, secret, sess, enc)
 
-    # 3. Apply overrides and invalidate cache
-    _apply_runtime_config(resolved_token, resolved_secret, enc)
-
-    if enc and not resolved_secret:
-        return    # encrypted but no secret → console-only; don't populate cache
-
-    # 4. Validate and pre-warm hydration cache so first aura_log() doesn't re-fetch
-    project_id = (raw.get("project_id") or "").strip()
-    session    = (raw.get("session") or "").strip()
-    if not project_id or not session:
-        # No blocking errors: on invalid/missing fields the SDK opts into local-only logging.
-    with _hydrate_lock:
-        _hydration_cache_token = resolved_token
-        _hydration_cache_raw   = raw
+    # 2. Fetch proj_auth synchronously (blocking HTTP) for encrypted flag + styles + session fallback
+    raw = fetch_proj_auth_payload(token)
+    ok = _apply_proj_auth_payload(raw)   # sets _session from raw when project_id + session present
+    # _override_session (from arg/env) wins over _session on console echo and WebSocket send.
 ```
 
 ### `Auralogger.sync_from_secret`
 
 ```python
 @staticmethod
-def sync_from_secret(project_token: str, user_secret: Optional[str] = None) -> None:
+def sync_from_secret(project_token: str, user_secret: Optional[str] = None, session: Optional[str] = None) -> None:
     trimmed = project_token.strip()
     if not trimmed:
         # No blocking errors: empty token opts into local-only logging.
 
     raw = fetch_proj_auth_payload(trimmed)    # blocking HTTP
-    enc = _read_encrypted_flag(raw)
+    secret = user_secret.strip() if isinstance(user_secret, str) else ""
+    sess = session.strip() if isinstance(session, str) else (get_resolved_session() or "")
+    enc = bool(secret)
+    _apply_runtime_config(trimmed, secret, sess, enc)
 
-    resolved_secret = user_secret.strip() if isinstance(user_secret, str) else os.environ.get("AURALOGGER_USER_SECRET","").strip()
-    if enc and not resolved_secret:
-        raise RuntimeError("Missing AURALOGGER_USER_SECRET")   # stricter than configure()
-
-    _apply_runtime_config(trimmed, resolved_secret, enc)
-
-    project_id = (raw.get("project_id") or "").strip()
-    session    = (raw.get("session") or "").strip()
-    if not project_id or not session:
-        # No blocking errors: missing fields opts into local-only logging.
-
-    with _hydrate_lock:
-        _hydration_cache_token = trimmed
-        _hydration_cache_raw   = raw
+    ok = _apply_proj_auth_payload(raw)   # pre-warm _session; _override_session wins when set
 ```
 
 `configure` vs `sync_from_secret`:
+- Both accept optional `session` with the same precedence: explicit arg → env → `proj_auth`.
 - `configure` silently falls back to env when args are `None`; `sync_from_secret` requires an explicit token.
-- `configure` skips cache population when encrypted + no secret (graceful console-only); `sync_from_secret` **raises** `RuntimeError` in the same condition.
 - Use `configure` in application startup; use `sync_from_secret` when you need a guaranteed-ready SDK before logging begins (e.g. `test-serverlog`).
 
 ### `_apply_runtime_config`
 
 ```python
 @staticmethod
-def _apply_runtime_config(project_token, user_secret, enc=True) -> None:
-    global _override_project_token, _override_user_secret, _encrypted
-    global _hydration_cache_token, _hydration_cache_raw, _local_session_id
-    _override_project_token = project_token
-    _override_user_secret   = user_secret
-    _encrypted              = enc
-    _local_session_id       = None          # reset UUID so next log gets a fresh session
-    with _hydrate_lock:
-        _hydration_cache_token = None       # invalidate stale cache
-        _hydration_cache_raw   = None
+def _apply_runtime_config(project_token, user_secret, session="", enc=True) -> None:
+    global _project_token, _user_secret, _encrypted, _override_session
+    global _session, _proj_auth_started, _proj_auth_ok, _local_session_id
+    _project_token = project_token or None
+    _user_secret   = user_secret or None
+    _encrypted     = enc
+    _override_session = session.strip() if isinstance(session, str) and session.strip() else None
+    _reset_proj_auth_state_locked()   # clears _session, _local_session_id, proj_auth flags
+    _reset_batch_state_locked()
 ```
 
 ### `Auralogger.log` and `Auralogger.close_socket`
